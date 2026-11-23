@@ -8,18 +8,23 @@ actor GitProcessRunner {
 	private let credentialStore: any GitCredentialPersisting
 	private let credentialHelper: GitCredentialHelper
 	private let accountSelection: GitHubAccountSelection
+	private let lfsExecutableScope: GitLFSExecutableScope?
 	private let decisionStore = GitCredentialSaveDecisionStore()
 
 	init(
 		configuration: GitProcessConfiguration = GitProcessConfiguration(),
 		credentialStore: any GitCredentialPersisting = GitCredentialStore(),
 		credentialHelper: GitCredentialHelper = GitCredentialHelper(),
-		accountSelection: GitHubAccountSelection = GitHubAccountSelection()
+		accountSelection: GitHubAccountSelection = GitHubAccountSelection(),
+		lfsExecutableURLs: [URL] = GitLFSExecutableScope.installationURLs
 	) {
 		self.configuration = configuration
 		self.credentialStore = credentialStore
 		self.credentialHelper = credentialHelper
 		self.accountSelection = accountSelection
+		lfsExecutableScope =
+			configuration.runtimeURL == nil
+			? nil : try? GitLFSExecutableScope(executableURLs: lfsExecutableURLs)
 	}
 
 	func requestRun(
@@ -332,7 +337,12 @@ actor GitProcessRunner {
 		if let runtimeURL = configuration.runtimeURL {
 			result["GIT_EXEC_PATH"] = runtimeURL.appending(path: "libexec/git-core").path
 			result["GIT_TEMPLATE_DIR"] = runtimeURL.appending(path: "share/git-core/templates").path
-			result["PATH"] = runtimeURL.appending(path: "bin").path + ":/usr/bin:/bin:/usr/sbin:/sbin"
+			var paths = [runtimeURL.appending(path: "bin").path]
+			if let lfsExecutableScope {
+				paths.append(lfsExecutableScope.directoryURL.path)
+			}
+			paths += ["/usr/bin", "/bin", "/usr/sbin", "/sbin"]
+			result["PATH"] = paths.joined(separator: ":")
 		}
 		if isNetworkOperation {
 			if let homeURL = configuration.isolatedHomeDirectoryURL {

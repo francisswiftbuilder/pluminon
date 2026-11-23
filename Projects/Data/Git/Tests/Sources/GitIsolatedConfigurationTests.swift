@@ -299,6 +299,54 @@ struct GitIsolatedConfigurationTests {
 	}
 
 	@Test
+	func testBundledRuntimeExposesOnlyGitLFSToCheckoutHook() async throws {
+		let repositoryURL = try makeTemporaryRepository()
+		defer { try? FileManager.default.removeItem(at: repositoryURL) }
+		let fileManager = FileManager.default
+		let toolsURL = repositoryURL.appending(path: "External Tools", directoryHint: .isDirectory)
+		try fileManager.createDirectory(at: toolsURL, withIntermediateDirectories: false)
+		let executableURL = toolsURL.appending(path: "git-lfs")
+		try "#!/bin/sh\nprintf '%s\\n' \"$@\" > lfs-hook-arguments\n".write(
+			to: executableURL, atomically: true, encoding: .utf8)
+		try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: executableURL.path)
+		try fileManager.createSymbolicLink(
+			at: toolsURL.appending(path: "pluminon-lfs-path-sentinel"),
+			withDestinationURL: executableURL)
+		let runner = GitProcessRunner(
+			configuration: GitProcessConfiguration(
+				runtimeURL: repositoryURL.appending(path: "runtime"),
+				globalConfigurationURL: repositoryURL.appending(path: ".git/app.config")),
+			credentialStore: GitCredentialPersistingStub(),
+			lfsExecutableURLs: [toolsURL, executableURL]
+		)
+		_ = try await runner.requestRun(
+			arguments: [
+				"-c", "user.name=Pluminon", "-c", "user.email=pluminon@example.com", "commit",
+				"--allow-empty", "-m", "Initial commit",
+			], at: repositoryURL)
+		let hooksURL = repositoryURL.appending(path: ".git/lfs-test-hooks", directoryHint: .isDirectory)
+		try fileManager.createDirectory(at: hooksURL, withIntermediateDirectories: false)
+		let hookURL = hooksURL.appending(path: "post-checkout")
+		try """
+		#!/bin/sh
+		command -v git-lfs >/dev/null || exit 1
+		if command -v pluminon-lfs-path-sentinel >/dev/null; then exit 1; fi
+		exec git lfs post-checkout "$@"
+		""".write(to: hookURL, atomically: true, encoding: .utf8)
+		try fileManager.setAttributes([.posixPermissions: 0o700], ofItemAtPath: hookURL.path)
+
+		let commit = try await runner.requestRun(arguments: ["rev-parse", "HEAD"], at: repositoryURL)
+		let commitHash = commit.standardOutput.trimmingCharacters(in: .newlines)
+		_ = try await runner.requestRun(
+			arguments: ["-c", "core.hooksPath=\(hooksURL.path)", "switch", "--detach", "HEAD"],
+			at: repositoryURL, environment: ["PATH": toolsURL.path])
+
+		let hookArguments = try String(
+			contentsOf: repositoryURL.appending(path: "lfs-hook-arguments"), encoding: .utf8)
+		#expect(hookArguments == "post-checkout\n\(commitHash)\n\(commitHash)\n1\n")
+	}
+
+	@Test
 	func testAuthenticationFailurePreservesDetailsWithoutCredentials() async throws {
 		let repositoryURL = try makeTemporaryRepository()
 		defer { try? FileManager.default.removeItem(at: repositoryURL) }
