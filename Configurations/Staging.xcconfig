@@ -1,4 +1,5 @@
 PLUMINON_DISPLAY_NAME = Pluminon Staging
 PLUMINON_PRODUCT_NAME = Pluminon Staging
+EXECUTABLE_NAME = $(PLUMINON_PRODUCT_NAME)
 PLUMINON_BUNDLE_IDENTIFIER = com.francisswiftbuilder.pluminon.staging
 PLUMINON_DATA_NAMESPACE = Pluminon Staging
