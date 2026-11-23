@@ -9,6 +9,12 @@ fi
 CONFIGURATION="$1"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+DESTINATION='platform=macOS'
+
+if [[ "$CONFIGURATION" == "Release" ]]; then
+	DESTINATION='generic/platform=macOS'
+fi
+
 SCHEMES=(
 	DomainGit
 	CoreGitCredential
@@ -27,7 +33,7 @@ for SCHEME in "${SCHEMES[@]}"; do
 		-workspace "$ROOT_DIR/Pluminon.xcworkspace" \
 		-scheme "$SCHEME" \
 		-configuration "$CONFIGURATION" \
-		-destination 'platform=macOS' \
+		-destination "$DESTINATION" \
 		CODE_SIGNING_ALLOWED=NO \
 		COMPILER_INDEX_STORE_ENABLE=NO \
 		ENABLE_USER_SCRIPT_SANDBOXING=NO
