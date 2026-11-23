@@ -24,7 +24,7 @@ private var appTargetSettings: SettingsDictionary {
 		"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
 		"CODE_SIGN_ENTITLEMENTS": .string(Permissions.appEntitlementsBuildSetting),
 		"ENABLE_USER_SCRIPT_SANDBOXING": "NO",
-		"PRODUCT_NAME": "$(PLUMINON_PRODUCT_NAME)",
+		"PRODUCT_NAME": .string(environment.name),
 		"PRODUCT_MODULE_NAME": .string(environment.name),
 		"PRODUCT_BUNDLE_IDENTIFIER": "$(PLUMINON_BUNDLE_IDENTIFIER)",
 	]
@@ -43,11 +43,9 @@ public let baseSettings: SettingsDictionary = [
 	"SWIFT_STRICT_CONCURRENCY": "complete",
 ]
 
-// The app target renames its product, so the generated TEST_HOST keeps the target name for the
-// executable and no longer matches the bundle. Point it at the renamed product instead.
 public var appTestsSettings: Settings {
 	let executablePath =
-		"$(BUILT_PRODUCTS_DIR)/$(PLUMINON_PRODUCT_NAME).app/Contents/MacOS/$(PLUMINON_PRODUCT_NAME)"
+		"$(BUILT_PRODUCTS_DIR)/\(environment.name).app/Contents/MacOS/$(PLUMINON_PRODUCT_NAME)"
 	let testHostSettings: SettingsDictionary = [
 		"TEST_HOST": .string(executablePath),
 		"BUNDLE_LOADER": "$(TEST_HOST)",
