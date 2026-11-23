@@ -20,5 +20,11 @@ let project = Project(
 		.domainGit,
 		.domainGitInterface,
 	],
-	schemes: []
+	schemes: [
+		.scheme(
+			name: "DomainGit",
+			shared: true,
+			buildAction: .buildAction(targets: [.domainGit, .domainGitInterface])
+		)
+	]
 )

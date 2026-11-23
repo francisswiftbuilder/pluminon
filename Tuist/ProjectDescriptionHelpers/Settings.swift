@@ -24,6 +24,7 @@ private var appTargetSettings: SettingsDictionary {
 		"ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME": "",
 		"CODE_SIGN_ENTITLEMENTS": .string(Permissions.appEntitlementsBuildSetting),
 		"ENABLE_USER_SCRIPT_SANDBOXING": "NO",
+		"EXECUTABLE_NAME": "$(PLUMINON_PRODUCT_NAME)",
 		"PRODUCT_NAME": .string(environment.name),
 		"PRODUCT_MODULE_NAME": .string(environment.name),
 		"PRODUCT_BUNDLE_IDENTIFIER": "$(PLUMINON_BUNDLE_IDENTIFIER)",
