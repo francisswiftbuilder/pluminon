@@ -2424,6 +2424,12 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 			try await requestFetch(
 				remote: branch.remoteName, reference: nil, at: repositoryURL,
 				allowsUserInteraction: result.failed.isEmpty)
+		} catch is CancellationError {
+			try Task.checkCancellation()
+			if !result.completed.isEmpty && notices.isEmpty { notices += result.completed }
+			notices.append(
+				"Remote state couldn’t be refreshed. Fetch was cancelled. Use Fetch to retry the refresh."
+			)
 		} catch {
 			try Task.checkCancellation()
 			if !result.completed.isEmpty && notices.isEmpty { notices += result.completed }
