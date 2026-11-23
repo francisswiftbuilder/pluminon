@@ -1,7 +1,6 @@
 import CoreGitCredential
 import DomainGitInterface
 import Foundation
-import Synchronization
 
 actor GitProcessRunner {
 	private let configuration: GitProcessConfiguration
@@ -154,7 +153,7 @@ actor GitProcessRunner {
 		let standardInputPipe = standardInput.map { _ in Pipe() }
 		process.standardInput = standardInputPipe ?? FileHandle.nullDevice
 		defer { try? standardInputPipe?.fileHandleForWriting.close() }
-		let validationError = Mutex<(any Error)?>(nil)
+		let validationState = GitPreparedReferenceValidationState()
 		let onPrepared: (@Sendable () -> Void)?
 		if let validatePreparedReferences, let standardInputPipe {
 			onPrepared = {
@@ -163,7 +162,7 @@ actor GitProcessRunner {
 						try await validatePreparedReferences()
 						Self.write("commit\n", to: standardInputPipe)
 					} catch {
-						validationError.withLock { $0 = error }
+						await validationState.record(error)
 						Self.write("abort\n", to: standardInputPipe)
 					}
 				}
@@ -194,7 +193,7 @@ actor GitProcessRunner {
 		let standardError = String(decoding: output.standardError, as: UTF8.self)
 		let standardOutput = String(decoding: standardOutputData, as: UTF8.self)
 		try Task.checkCancellation()
-		if let error = validationError.withLock({ $0 }) { throw error }
+		if let error = await validationState.failure() { throw error }
 		if output.terminationStatus != 0, standardError.contains("PLUMINON_ASKPASS_CANCELLED") {
 			throw CancellationError()
 		}
