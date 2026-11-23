@@ -34,6 +34,7 @@ trap cleanup EXIT
 
 mkdir -p "$OUTPUT_DIR" "$STAGING_DIR"
 "$ROOT_DIR/script/build_bundled_git.sh"
+"$ROOT_DIR/script/build_workspace_modules.sh" Release
 
 xcodebuild archive \
 	-workspace "$ROOT_DIR/Pluminon.xcworkspace" \

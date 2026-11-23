@@ -3,9 +3,9 @@ name: CI
 on:
   workflow_call:
   push:
-    branches: [develop]
+    branches: [main, develop]
   pull_request:
-    branches: [develop]
+    branches: [main, develop]
 
 concurrency:
   group: ci-checks-${{ github.ref }}
@@ -37,10 +37,11 @@ jobs:
         run: |
           make bundled-git
           ./script/test_bundled_git.sh .build/bundled-git/runtime
+          ./script/build_workspace_modules.sh Debug
           WORKSPACE=Pluminon.xcworkspace
-          for SCHEME in AppTests CoreGitCredential CoreRepositoryDiff DataGit \
+          for SCHEME in CoreGitCredential CoreRepositoryDiff DataGit \
             FeatureRepositoryChanges FeatureRepositoryHistory FeatureRepositoryOperations \
-            FeatureRepositoryStashes FeatureRepositoryTree; do
+            FeatureRepositoryStashes FeatureRepositoryTree AppTests; do
             xcodebuild test \
               -workspace "$WORKSPACE" \
               -scheme "$SCHEME" \
