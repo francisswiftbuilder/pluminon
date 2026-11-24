@@ -20,7 +20,7 @@ final class DiffViewerViewModel {
 		let revision: Int
 		let input: Input
 		let document: DiffDocument
-		let sideBySideRows: [DiffSideBySideRow]
+		let hunks: [DiffHunk]
 	}
 
 	private(set) var presentation: Presentation?
@@ -60,7 +60,7 @@ final class DiffViewerViewModel {
 				revision: requestID,
 				input: input,
 				document: document,
-				sideBySideRows: try DiffSideBySideBuilder.buildCancellable(from: document)
+				hunks: try DiffHunk.build(from: document)
 			)
 		}
 		let result = try? await withTaskCancellationHandler {

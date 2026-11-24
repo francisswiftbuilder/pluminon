@@ -328,10 +328,6 @@ struct RepositoryOperationViewModelTests {
 				viewModel.didRequestFetchAll()
 				try await waitUntil { events.withLock { $0.started } }
 				#expect(viewModel.activity == .fetchAll)
-				for _ in 0..<200 where viewModel.presentedActivity != .fetchAll {
-					try? await Task.sleep(for: .milliseconds(10))
-				}
-				#expect(viewModel.presentedActivity == .fetchAll)
 
 				viewModel.didRequestCancelOperation()
 				try await waitUntil { events.withLock { $0.cancelled } }
@@ -340,7 +336,6 @@ struct RepositoryOperationViewModelTests {
 				}
 
 				#expect(viewModel.activity == nil)
-				#expect(viewModel.presentedActivity == nil)
 				#expect(!(viewModel.isLoading))
 
 			}
@@ -348,7 +343,7 @@ struct RepositoryOperationViewModelTests {
 	}
 
 	@Test
-	func testShortSyncDoesNotPresentTransientActivity() async throws {
+	func testShortSyncShowsActivityImmediatelyAndClearsOnCompletion() async throws {
 		try await confirmation("Network task completed") { completed in
 			let referencesUseCase = OperationsReferencesUseCaseStub { _ in
 				RepositorySnapshot(
@@ -376,11 +371,10 @@ struct RepositoryOperationViewModelTests {
 			)
 
 			viewModel.didRequestFetchAll()
+			#expect(viewModel.activity == .fetchAll)
 			try await waitUntil { !viewModel.isLoading }
-			try? await Task.sleep(for: .milliseconds(300))
 
 			#expect(viewModel.activity == nil)
-			#expect(viewModel.presentedActivity == nil)
 			#expect(!(viewModel.isLoading))
 
 		}
@@ -393,9 +387,10 @@ struct RepositoryOperationViewModelTests {
 		#expect(RepositorySyncViewModel.Activity.pull("develop").statusDescription == "Pulling develop")
 		#expect(
 			RepositorySyncViewModel.Activity.pushTags("origin").cancellationLabel == "Cancel Tag Push")
-		#expect(RepositorySyncViewModel.Activity.fetchAll.isFetch)
-		#expect(RepositorySyncViewModel.Activity.pull("develop").isPull)
-		#expect(RepositorySyncViewModel.Activity.push(nil).isPush)
+		#expect(RepositorySyncViewModel.Activity.fetchAll.cancellationLabel == "Cancel Fetch")
+		#expect(RepositorySyncViewModel.Activity.pull("develop").cancellationLabel == "Cancel Pull")
+		#expect(
+			RepositorySyncViewModel.Activity.push(nil).statusDescription == "Pushing current branch")
 	}
 
 	@Test

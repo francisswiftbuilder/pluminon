@@ -4,7 +4,7 @@ import SwiftUI
 struct DiffViewer: View {
 	let searchModel: RepositorySearchViewModel
 	let document: DiffDocument
-	let sideBySideRows: [DiffSideBySideRow]
+	let hunks: [DiffHunk]
 	let presentationMode: DiffPresentationMode
 	let filePath: String?
 	let lineAction: GitDiffLineAction?
@@ -18,7 +18,7 @@ struct DiffViewer: View {
 			switch presentationMode {
 			case .sideBySide:
 				DiffSideBySideView(
-					rows: sideBySideRows,
+					hunks: hunks,
 					filePath: filePath,
 					searchModel: searchModel,
 					lineAction: lineAction,
@@ -30,6 +30,7 @@ struct DiffViewer: View {
 			case .unified:
 				DiffUnifiedView(
 					document: document,
+					hunks: hunks,
 					filePath: filePath,
 					searchModel: searchModel,
 					lineAction: lineAction,
@@ -66,12 +67,11 @@ struct DiffViewer: View {
 		+let timeout = 60
 		 context
 		"""
+	let document = DiffDocument(lines: DiffParser.parse(diff))
 	DiffViewer(
 		searchModel: RepositorySearchViewModel(),
-		document: DiffDocument(lines: DiffParser.parse(diff)),
-		sideBySideRows: DiffSideBySideBuilder.build(
-			from: DiffDocument(lines: DiffParser.parse(diff))
-		),
+		document: document,
+		hunks: (try? DiffHunk.build(from: document)) ?? [],
 		presentationMode: .sideBySide,
 		filePath: "Sources/App.swift",
 		lineAction: .stage,

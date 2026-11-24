@@ -10,6 +10,17 @@ final class GitAccountViewModel {
 		case replaceToken(GitCredentialDescriptor)
 	}
 
+	struct RepositoryReadme {
+		let blocks: [RepositoryReadmeView.Block]
+		let isTruncated: Bool
+	}
+
+	private struct RepositoryDetails {
+		let repository: GitHubRepository
+		var files: [GitHubRepositoryFile]?
+		var readme: RepositoryReadme?
+	}
+
 	var token = ""
 	var identity = GitIdentityConfiguration()
 	private(set) var account: GitCredentialDescriptor? {
@@ -18,6 +29,7 @@ final class GitAccountViewModel {
 		}
 	}
 	private(set) var repositoryAccessRevision = 0
+	private(set) var repositoryDetailsRevision = 0
 	private(set) var accessibleRepositories: [GitHubRepository]?
 	private(set) var repositoryLoadError: String?
 	private(set) var isLoadingRepositories = false
@@ -38,6 +50,7 @@ final class GitAccountViewModel {
 	@ObservationIgnored private var connectionTask: Task<Void, Never>?
 	@ObservationIgnored private var repositoryLoadTask: Task<[GitHubRepository], any Error>?
 	private var repositoriesUpdatedAt: ContinuousClock.Instant?
+	private var repositoryDetails: [RepositoryDetails] = []
 	private var activeConnectionRequestID: Int?
 	private var connectionRequestSequence = 0
 
@@ -100,6 +113,7 @@ final class GitAccountViewModel {
 		{
 			return accessibleRepositories
 		}
+		if forceRefresh { invalidateRepositoryDetails() }
 		let revision = repositoryAccessRevision
 		let task = repositoryLoadTask ?? startRepositoryLoad(for: account, revision: revision)
 		let repositories = try await task.value
@@ -164,38 +178,79 @@ final class GitAccountViewModel {
 		repositoryLoadTask?.cancel()
 		repositoryLoadTask = nil
 		accessibleRepositories = nil
+		invalidateRepositoryDetails()
 		repositoryLoadError = nil
 		repositoriesUpdatedAt = nil
 		isLoadingRepositories = false
 	}
 
+	private func invalidateRepositoryDetails() {
+		repositoryDetailsRevision += 1
+		repositoryDetails = []
+	}
+
+	func cachedRepositoryFiles(for repository: GitHubRepository) -> [GitHubRepositoryFile]? {
+		repositoryDetails.first { $0.repository == repository }?.files
+	}
+
+	func cachedRepositoryReadme(for repository: GitHubRepository) -> RepositoryReadme? {
+		repositoryDetails.first { $0.repository == repository }?.readme
+	}
+
 	func loadRepositoryFiles(
 		for repository: GitHubRepository, account: GitCredentialDescriptor
-	) async throws -> [GitHubRepositoryFile] {
-		try await loadRepositorySection(for: account) { token in
+	) async throws {
+		guard self.account == account else { throw CancellationError() }
+		guard cachedRepositoryFiles(for: repository) == nil else { return }
+		let files = try await loadRepositorySection(for: account) { token in
 			try await client.repositoryFiles(for: repository, token: token)
 		}
+		updateRepositoryDetails(for: repository) { $0.files = files }
 	}
 
 	func loadRepositoryReadme(
 		for repository: GitHubRepository, account: GitCredentialDescriptor
-	) async throws -> GitHubRepositoryReadme {
-		try await loadRepositorySection(for: account) { token in
-			try await client.repositoryReadme(for: repository, token: token)
+	) async throws {
+		guard self.account == account else { throw CancellationError() }
+		guard cachedRepositoryReadme(for: repository) == nil else { return }
+		let readme = try await loadRepositorySection(for: account) { token in
+			let result = try await client.repositoryReadme(for: repository, token: token)
+			let blocks: [RepositoryReadmeView.Block]
+			if let markdown = result.markdown, !markdown.isEmpty {
+				let baseURL = repository.webURL.appending(
+					path: "blob/\(repository.defaultBranch ?? "HEAD")", directoryHint: .isDirectory)
+				blocks = try await RepositoryReadmeView.prepare(markdown: markdown, baseURL: baseURL)
+			} else {
+				blocks = []
+			}
+			return RepositoryReadme(blocks: blocks, isTruncated: result.isTruncated)
 		}
+		updateRepositoryDetails(for: repository) { $0.readme = readme }
+	}
+
+	private func updateRepositoryDetails(
+		for repository: GitHubRepository, update: (inout RepositoryDetails) -> Void
+	) {
+		var details = RepositoryDetails(repository: repository)
+		if let index = repositoryDetails.firstIndex(where: { $0.repository == repository }) {
+			details = repositoryDetails.remove(at: index)
+		}
+		update(&details)
+		repositoryDetails.append(details)
+		if repositoryDetails.count > 16 { repositoryDetails.removeFirst() }
 	}
 
 	private func loadRepositorySection<Value>(
 		for account: GitCredentialDescriptor, load: (String) async throws -> Value
 	) async throws -> Value {
 		guard self.account == account else { throw CancellationError() }
-		let revision = repositoryAccessRevision
+		let revision = repositoryDetailsRevision
 		guard let token = try store.secret(for: account) else {
 			throw GitHubAccountSelectionError.accountUnavailable
 		}
 		let value = try await load(token)
 		try Task.checkCancellation()
-		guard revision == repositoryAccessRevision else { throw CancellationError() }
+		guard revision == repositoryDetailsRevision else { throw CancellationError() }
 		return value
 	}
 

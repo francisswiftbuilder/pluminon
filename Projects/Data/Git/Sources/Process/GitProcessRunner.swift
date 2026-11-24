@@ -33,6 +33,7 @@ actor GitProcessRunner {
 		environment: [String: String] = [:],
 		acceptedTerminationStatuses: Set<Int32> = [0],
 		isNetworkOperation: Bool = false,
+		allowsLFSDownloads: Bool = false,
 		requiresSSHTrustScope: Bool = false,
 		allowsUserInteraction: Bool = true,
 		validatePreparedReferences: (@Sendable () async throws -> Void)? = nil
@@ -42,54 +43,73 @@ actor GitProcessRunner {
 			throw GitRepositoryError.commandFailed(
 				"Pluminon Git runtime is missing. Reinstall Pluminon or rebuild its bundled Git runtime.")
 		}
+		if configuration.globalConfigurationURL != nil, configuration.runtimeURL != nil,
+			lfsExecutableScope == nil
+		{
+			throw GitRepositoryError.commandFailed(
+				"Pluminon could not prepare its Git LFS configuration.")
+		}
 		if configuration.globalConfigurationURL != nil, requiresSSHTrustScope {
 			throw GitRepositoryError.authentication(
 				"Pluminon uses separate HTTPS credentials. Change this remote to its HTTPS URL, then connect your account in Settings."
 			)
 		}
 		let operationID = UUID().uuidString
+		let canBrokerLFSDownloads = allowsLFSDownloads && lfsExecutableScope?.hasExecutable == true
+		let selectedGitHubAccount =
+			isNetworkOperation || canBrokerLFSDownloads ? accountSelection.account : nil
+		let authenticationArguments: [String]
+		let usesNetworkEnvironment: Bool
+		if let homeURL = configuration.isolatedHomeDirectoryURL,
+			isNetworkOperation || canBrokerLFSDownloads
+		{
+			try FileManager.default.createDirectory(
+				at: homeURL,
+				withIntermediateDirectories: true,
+				attributes: [.posixPermissions: 0o700]
+			)
+			do {
+				authenticationArguments = try await requestAuthenticationArguments(
+					at: repositoryURL, environment: environment, operationID: operationID)
+				usesNetworkEnvironment = true
+			} catch GitRepositoryError.authentication where !isNetworkOperation {
+				authenticationArguments = []
+				usesNetworkEnvironment = false
+			}
+		} else {
+			authenticationArguments = []
+			usesNetworkEnvironment = isNetworkOperation
+		}
 		var didSucceed = false
 		defer {
-			if isNetworkOperation, !didSucceed {
+			if usesNetworkEnvironment, !didSucceed {
 				try? credentialStore.discardPending(operationID: operationID)
 				decisionStore.discard(operationID: operationID)
 			}
 		}
 
 		var trustScope: GitSSHTrustScope?
-		if isNetworkOperation && requiresSSHTrustScope {
+		if usesNetworkEnvironment && requiresSSHTrustScope {
 			trustScope = try makeTrustScope()
 		}
 		defer { trustScope?.remove() }
 		let broker: GitCredentialBroker?
-		if isNetworkOperation, let helperURL = configuration.askPassHelperURL {
+		if usesNetworkEnvironment, let helperURL = configuration.askPassHelperURL {
 			broker = try GitCredentialBroker(
 				helperURL: helperURL, operationID: operationID,
-				helper: credentialHelper.selectingGitHubAccount(accountSelection.account))
+				helper: credentialHelper.selectingGitHubAccount(selectedGitHubAccount))
 		} else {
 			broker = nil
 		}
 		defer { broker?.stop() }
 
-		let authenticationArguments: [String]
-		if isNetworkOperation, let homeURL = configuration.isolatedHomeDirectoryURL {
-			try FileManager.default.createDirectory(
-				at: homeURL,
-				withIntermediateDirectories: true,
-				attributes: [.posixPermissions: 0o700]
-			)
-			authenticationArguments = try await requestAuthenticationArguments(
-				at: repositoryURL, environment: environment, operationID: operationID)
-		} else {
-			authenticationArguments = []
-		}
 		let result = try await requestCommand(
 			arguments: arguments,
 			at: repositoryURL,
 			standardInput: standardInput,
 			environment: environment,
 			acceptedTerminationStatuses: acceptedTerminationStatuses,
-			isNetworkOperation: isNetworkOperation,
+			isNetworkOperation: usesNetworkEnvironment,
 			operationID: operationID,
 			trustScope: trustScope,
 			authenticationArguments: authenticationArguments,
@@ -98,7 +118,7 @@ actor GitProcessRunner {
 			validatePreparedReferences: validatePreparedReferences
 		)
 		broker?.stop()
-		if isNetworkOperation, result.terminationStatus == 0 {
+		if usesNetworkEnvironment, result.terminationStatus == 0 {
 			commitPendingCredentials(operationID: operationID)
 			decisionStore.discard(operationID: operationID)
 		}
@@ -322,8 +342,8 @@ actor GitProcessRunner {
 				result[key] = value
 			}
 			result["GIT_CONFIG_GLOBAL"] = configurationURL.path
-			result["GIT_CONFIG_NOSYSTEM"] = "1"
-			result["GIT_CONFIG_SYSTEM"] = "/dev/null"
+			result["GIT_CONFIG_NOSYSTEM"] = lfsExecutableScope == nil ? "1" : "0"
+			result["GIT_CONFIG_SYSTEM"] = lfsExecutableScope?.configurationURL.path ?? "/dev/null"
 			result["GIT_ALLOW_PROTOCOL"] = "https:file"
 			result["GIT_TERMINAL_PROMPT"] = "0"
 			result["GIT_EDITOR"] = "/usr/bin/true"
@@ -515,6 +535,12 @@ actor GitProcessRunner {
 		let message = redacted(standardError).trimmingCharacters(in: .whitespacesAndNewlines)
 		let lowercasedMessage = message.lowercased()
 		if configuration.globalConfigurationURL != nil {
+			if configuration.runtimeURL != nil, lfsExecutableScope?.hasExecutable != true,
+				lowercasedMessage.contains("git-lfs"), lowercasedMessage.contains("not found")
+			{
+				return .commandFailed(
+					"This operation requires Git LFS. Install git-lfs and reopen Pluminon, then try again.")
+			}
 			if lowercasedMessage.contains("identity unknown")
 				|| lowercasedMessage.contains("auto-detection is disabled")
 				|| lowercasedMessage.contains("unable to auto-detect email")

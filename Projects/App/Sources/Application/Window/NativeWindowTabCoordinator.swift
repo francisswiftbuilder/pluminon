@@ -100,14 +100,15 @@ final class NativeWindowTabCoordinator: NSObject, RepositoryWindowTabCoordinatin
 			if anchor.tabGroup == nil || anchor.tabGroup !== window.tabGroup {
 				target.addTabbedWindow(window, ordered: .above)
 			}
-			if let tabGroup = anchor.tabGroup, tabGroup.isTabBarVisible == false {
-				anchor.toggleTabBar(nil)
-			}
+			showTabBar(in: anchor)
 			if activates {
 				select(window)
 			}
-		} else if window.isKeyWindow {
-			didSelect(window)
+		} else {
+			showTabBar(in: window)
+			if window.isKeyWindow {
+				didSelect(window)
+			}
 		}
 		restorePendingRepositoryWindows()
 	}
@@ -131,18 +132,21 @@ final class NativeWindowTabCoordinator: NSObject, RepositoryWindowTabCoordinatin
 		)
 		configure(newWindow)
 		newWindow.title = PluminonRuntimeConfiguration.displayName
+		newWindow.toolbarStyle = anchor?.toolbarStyle ?? .unified
 		newWindow.minSize = NSSize(width: 760, height: 520)
 		newWindow.isReleasedWhenClosed = false
 		if anchor == nil {
 			newWindow.center()
 		}
-		newWindow.contentViewController = NSHostingController(
+		let hostingController = NSHostingController(
 			rootView: HostedRepositoryRootView(
 				initialRepositoryID: repositoryID,
 				makeRootView: makeRootView
 			)
 			.environment(\.windowTabCoordinator, self)
 		)
+		hostingController.sizingOptions = []
+		newWindow.contentViewController = hostingController
 		let controller = RepositoryWindowController(window: newWindow, coordinator: self)
 		newWindow.windowController = controller
 		windowControllers.append(controller)
@@ -170,6 +174,12 @@ final class NativeWindowTabCoordinator: NSObject, RepositoryWindowTabCoordinatin
 		didSelect(primaryWindow)
 	}
 
+	private func showTabBar(in window: NSWindow) {
+		if window.tabGroup?.isTabBarVisible != true {
+			window.toggleTabBar(nil)
+		}
+	}
+
 	private func select(_ window: NSWindow) {
 		window.tabGroup?.selectedWindow = window
 		window.makeKeyAndOrderFront(nil)
@@ -187,6 +197,7 @@ final class NativeWindowTabCoordinator: NSObject, RepositoryWindowTabCoordinatin
 		guard let window = notification.object as? NSWindow,
 			registeredWindows.contains(window)
 		else { return }
+		showTabBar(in: window)
 		didSelect(window)
 	}
 

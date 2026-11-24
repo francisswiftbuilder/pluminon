@@ -6,7 +6,7 @@ extension InfoPlist: InfoPlists {
 			with: [
 				"CFBundleDisplayName": "$(PLUMINON_DISPLAY_NAME)",
 				"PluminonDataNamespace": "$(PLUMINON_DATA_NAMESPACE)",
-				"PluminonCredentialNamespace": "$(PLUMINON_BUNDLE_IDENTIFIER)",
+				"PluminonCredentialNamespace": "$(PLUMINON_CREDENTIAL_NAMESPACE)",
 				"LSApplicationCategoryType": "public.app-category.developer-tools",
 			]
 		)

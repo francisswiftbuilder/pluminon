@@ -2,10 +2,11 @@ import DomainGitInterface
 import SwiftUI
 
 struct RepositoryWelcomeContainerView: View {
-	private enum Source: Hashable {
+	enum Source: Hashable {
 		case local, remote
 	}
 
+	let source: Source
 	let accountViewModel: GitAccountViewModel
 	let repositories: [SavedRepository]
 	let isWorking: Bool
@@ -14,38 +15,9 @@ struct RepositoryWelcomeContainerView: View {
 	let onCloneRepository: (String) -> Void
 	let onCancel: () -> Void
 
-	@State private var selection: Source?
 	@State private var localSelection: UUID?
 
-	private var source: Source {
-		selection ?? .remote
-	}
-
 	var body: some View {
-		GeometryReader { geometry in
-			let sidebarMaximum = min(300, geometry.size.width / 3)
-			HSplitView {
-				sourceList
-					.frame(
-						minWidth: min(180, sidebarMaximum), idealWidth: min(220, sidebarMaximum),
-						maxWidth: sidebarMaximum)
-				repositoryContent
-					.frame(maxWidth: .infinity, maxHeight: .infinity)
-			}
-			.frame(width: geometry.size.width, height: geometry.size.height)
-		}
-	}
-
-	private var sourceList: some View {
-		List(selection: Binding<Source?>(get: { source }, set: { selection = $0 })) {
-			sourceRow(.local, title: "Local Repositories", systemImage: "folder")
-			sourceRow(.remote, title: "Remote Repositories", systemImage: "network")
-		}
-		.listStyle(.sidebar)
-	}
-
-	@ViewBuilder
-	private var repositoryContent: some View {
 		switch source {
 		case .local:
 			localRepositories
@@ -55,22 +27,6 @@ struct RepositoryWelcomeContainerView: View {
 				onOpenRepository: onOpenRepository, onClone: onCloneRepository,
 				onCancel: onCancel)
 		}
-	}
-
-	private func sourceRow(_ source: Source, title: LocalizedStringKey, systemImage: String)
-		-> some View
-	{
-		HStack(spacing: 8) {
-			Image(systemName: systemImage)
-				.foregroundStyle(.secondary)
-				.accessibilityHidden(true)
-				.frame(width: 16)
-			Text(title)
-				.foregroundStyle(.primary)
-				.lineLimit(1)
-		}
-		.contentShape(.rect)
-		.tag(source)
 	}
 
 	private var localRepositories: some View {

@@ -14,7 +14,7 @@ public final class GitCredentialStore: GitCredentialPersisting, Sendable {
 		let updatedAt: Date?
 	}
 
-	private static let accessGroupSuffix = "com.francisswiftbuilder.pluminon.GitCredential"
+	private static let accessGroupSuffix = "io.github.francisswiftbuilder.pluminon.GitCredential"
 	private static let stalePendingAge: TimeInterval = 24 * 60 * 60
 
 	private let service: String

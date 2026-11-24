@@ -190,7 +190,7 @@ struct RepositoryUseCaseTests {
 		)
 
 		let snapshot = try await useCase.mergeBranch(
-			named: mergeBranch.name,
+			named: mergeBranch.name, expecting: currentBranch,
 			at: repositoryURL
 		)
 		let events = await recorder.recordedEvents()

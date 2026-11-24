@@ -38,6 +38,11 @@ struct GitAccountViewModelTests {
 	final class AuthenticationURLProtocol: URLProtocol, @unchecked Sendable {
 		private static let cacheTestRepositoryRequests = Mutex(0)
 		private static let rateLimitTestRequests = Mutex(0)
+		private static let detailRequests = Mutex(0)
+
+		static var detailRequestCount: Int {
+			detailRequests.withLock { $0 }
+		}
 
 		static var repositoryRequestCount: Int {
 			cacheTestRepositoryRequests.withLock { $0 }
@@ -49,6 +54,11 @@ struct GitAccountViewModelTests {
 		override func startLoading() {
 			let authorization = request.value(forHTTPHeaderField: "Authorization")
 			if authorization == "Bearer slow-test-token" { return }
+			if authorization == "Bearer details-cache-test-token",
+				request.url?.path.hasPrefix("/repos/") == true
+			{
+				Self.detailRequests.withLock { $0 += 1 }
+			}
 			let login = authorization == "Bearer different-test-token" ? "different" : "octocat"
 			var status = authorization == "Bearer invalid-test-token" ? 401 : 200
 			if request.url?.path == "/user/repos", authorization == "Bearer cache-rate-limit-token" {
@@ -65,16 +75,19 @@ struct GitAccountViewModelTests {
 				if authorization == "Bearer cache-test-token" {
 					Self.cacheTestRepositoryRequests.withLock { $0 += 1 }
 				}
-				body =
-					#"[{"id":42,"full_name":"\#(login)/ios-project","description":"iOS application","default_branch":"main","private":true,"archived":false}]"#
-			case "/repos/\(login)/ios-project/contents":
+				let ios =
+					#"{"id":42,"full_name":"\#(login)/ios-project","description":"iOS application","default_branch":"main","private":true,"archived":false}"#
+				let mac =
+					#"{"id":43,"full_name":"\#(login)/mac-project","description":"macOS application","default_branch":"main","private":true,"archived":false}"#
+				body = authorization == "Bearer details-cache-test-token" ? "[\(ios),\(mac)]" : "[\(ios)]"
+			case "/repos/\(login)/ios-project/contents", "/repos/\(login)/mac-project/contents":
 				body = """
 					[
 						{"name":"Sources","path":"Sources","type":"dir","html_url":"https://github.com/\(login)/ios-project/tree/main/Sources"},
 						{"name":"README.md","path":"README.md","type":"file","html_url":"https://github.com/\(login)/ios-project/blob/main/README.md"}
 					]
 					"""
-			case "/repos/\(login)/ios-project/readme":
+			case "/repos/\(login)/ios-project/readme", "/repos/\(login)/mac-project/readme":
 				body =
 					"# iOS Project\n\nA native app with **SwiftUI** views.\n\n## Getting Started\nOpen Package.swift in Xcode."
 			default:
@@ -274,6 +287,47 @@ struct GitAccountViewModelTests {
 
 		#expect(try await viewModel.loadRepositories(for: account, forceRefresh: true) == firstList)
 		#expect(AuthenticationURLProtocol.repositoryRequestCount == previousRequests + 2)
+	}
+
+	@Test
+	func repositoryDetailsAreReusedAndClearedOnRefreshOrAccountSwitch() async throws {
+		let context = try makeContext()
+		let first = GitCredentialDescriptor(kind: .https, host: "github.com", account: "octocat")
+		let second = GitCredentialDescriptor(kind: .https, host: "github.com", account: "different")
+		try context.store.save(secret: "details-cache-test-token", for: first)
+		try context.store.save(secret: "different-test-token", for: second)
+		let viewModel = context.viewModel
+		viewModel.switchAccount(to: first)
+		let repositories = try await viewModel.loadRepositories(for: first)
+		let repository = try #require(repositories.first)
+		let otherRepository = try #require(repositories.last)
+		#expect(repository.id != otherRepository.id)
+		let initialRequests = AuthenticationURLProtocol.detailRequestCount
+
+		try await viewModel.loadRepositoryFiles(for: repository, account: first)
+		try await viewModel.loadRepositoryReadme(for: repository, account: first)
+		#expect(
+			viewModel.cachedRepositoryFiles(for: repository)?.map(\.name) == ["Sources", "README.md"])
+		#expect(viewModel.cachedRepositoryReadme(for: repository)?.blocks.isEmpty == false)
+		try await viewModel.loadRepositoryFiles(for: otherRepository, account: first)
+		try await viewModel.loadRepositoryReadme(for: otherRepository, account: first)
+		#expect(AuthenticationURLProtocol.detailRequestCount == initialRequests + 4)
+		#expect(viewModel.cachedRepositoryFiles(for: repository)?.isEmpty == false)
+		#expect(viewModel.cachedRepositoryReadme(for: repository)?.blocks.isEmpty == false)
+		try await viewModel.loadRepositoryFiles(for: repository, account: first)
+		try await viewModel.loadRepositoryReadme(for: repository, account: first)
+		#expect(AuthenticationURLProtocol.detailRequestCount == initialRequests + 4)
+
+		_ = try await viewModel.loadRepositories(for: first, forceRefresh: true)
+		#expect(viewModel.cachedRepositoryFiles(for: repository) == nil)
+		#expect(viewModel.cachedRepositoryReadme(for: repository) == nil)
+		try await viewModel.loadRepositoryFiles(for: repository, account: first)
+		try await viewModel.loadRepositoryReadme(for: repository, account: first)
+		#expect(AuthenticationURLProtocol.detailRequestCount == initialRequests + 6)
+
+		viewModel.switchAccount(to: second)
+		#expect(viewModel.cachedRepositoryFiles(for: repository) == nil)
+		#expect(viewModel.cachedRepositoryReadme(for: repository) == nil)
 	}
 
 	@Test

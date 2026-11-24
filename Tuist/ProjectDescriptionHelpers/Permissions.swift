@@ -7,5 +7,5 @@ public enum Permissions {
 	)
 	public static let appEntitlementsBuildSetting = "$(SRCROOT)/Pluminon.entitlements"
 	public static let gitCredentialAccessGroupSuffix =
-		"com.francisswiftbuilder.pluminon.GitCredential"
+		"io.github.francisswiftbuilder.pluminon.GitCredential"
 }

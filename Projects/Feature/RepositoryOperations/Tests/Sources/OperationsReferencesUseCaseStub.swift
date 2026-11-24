@@ -102,7 +102,8 @@ struct OperationsReferencesUseCaseStub: RepositoryReferencesUseCase {
 		try await renameBranchOperation(name, newName, repositoryURL)
 	}
 
-	func mergeBranch(named name: String, at repositoryURL: URL) async throws
+	func mergeBranch(named name: String, expecting currentBranch: GitBranch, at repositoryURL: URL)
+		async throws
 		-> RepositorySnapshot
 	{
 		fatalError()

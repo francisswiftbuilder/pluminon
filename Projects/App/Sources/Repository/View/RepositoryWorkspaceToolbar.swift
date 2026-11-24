@@ -7,6 +7,7 @@ struct RepositoryWorkspaceToolbar: ToolbarContent {
 	private let referencesViewModel: RepositoryReferencesViewModel
 	private let syncViewModel: RepositorySyncViewModel
 	private let remotesViewModel: RemotesViewModel
+	private let allowsRepositoryActions: Bool
 	let onCreateBranch: () -> Void
 
 	init(
@@ -15,6 +16,7 @@ struct RepositoryWorkspaceToolbar: ToolbarContent {
 		referencesViewModel: RepositoryReferencesViewModel,
 		syncViewModel: RepositorySyncViewModel,
 		remotesViewModel: RemotesViewModel,
+		allowsRepositoryActions: Bool,
 		onCreateBranch: @escaping () -> Void
 	) {
 		self.viewModel = viewModel
@@ -22,21 +24,43 @@ struct RepositoryWorkspaceToolbar: ToolbarContent {
 		self.referencesViewModel = referencesViewModel
 		self.syncViewModel = syncViewModel
 		self.remotesViewModel = remotesViewModel
+		self.allowsRepositoryActions = allowsRepositoryActions
 		self.onCreateBranch = onCreateBranch
 	}
 
 	var body: some ToolbarContent {
+		ToolbarItem(placement: .primaryAction) {
+			if allowsRepositoryActions {
+				let branchName = referencesViewModel.switchingBranchName
+				if let activity = syncViewModel.activity,
+					branchName == nil || syncViewModel.isBlockingLocalRefresh
+				{
+					RepositoryActivityIndicator(
+						activity.statusDescription,
+						cancellation: (activity.cancellationLabel, syncViewModel.didRequestCancelOperation)
+					)
+				} else if let branchName {
+					RepositoryActivityIndicator("Switching to \(branchName)")
+				}
+			}
+		}
+
 		ToolbarSpacer(.flexible, placement: .primaryAction)
 
 		ToolbarItemGroup(placement: .primaryAction) {
 			Button("New Branch", systemImage: "arrow.triangle.branch", action: onCreateBranch)
-				.disabled(!referencesViewModel.canCreateBranch || isMutating || syncViewModel.isLoading)
+				.disabled(
+					!allowsRepositoryActions || !referencesViewModel.canCreateBranch || isMutating
+						|| syncViewModel.isLoading
+				)
 				.help("Create a Branch from \(referencesViewModel.currentBranchName)")
 
 			Button("Refresh", systemImage: "arrow.clockwise") {
 				viewModel.didRequestRefresh()
 			}
-			.disabled(viewModel.isLoading || isMutating || syncViewModel.isLoading)
+			.disabled(
+				!allowsRepositoryActions || viewModel.isLoading || isMutating || syncViewModel.isLoading
+			)
 			.help("Refresh Repository")
 		}
 
@@ -46,11 +70,11 @@ struct RepositoryWorkspaceToolbar: ToolbarContent {
 			RepositoryFetchToolbarControl(
 				syncViewModel: syncViewModel, remotesViewModel: remotesViewModel
 			)
-			.disabled(isMutating)
+			.disabled(!allowsRepositoryActions || isMutating)
 			RepositoryPullToolbarControl(viewModel: syncViewModel)
-				.disabled(isMutating)
+				.disabled(!allowsRepositoryActions || isMutating)
 			RepositoryPushMenu(viewModel: syncViewModel)
-				.disabled(isMutating)
+				.disabled(!allowsRepositoryActions || isMutating)
 		}
 	}
 

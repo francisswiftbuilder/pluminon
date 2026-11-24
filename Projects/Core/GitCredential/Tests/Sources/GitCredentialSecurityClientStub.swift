@@ -155,7 +155,7 @@ final class GitCredentialSecurityClientStub: GitCredentialSecurityClient, @unche
 		guard storageIsCurrent else { return }
 		record[kSecUseDataProtectionKeychain as String] = true
 		record[kSecAttrAccessGroup as String] =
-			"TESTTEAM.com.francisswiftbuilder.pluminon.GitCredential"
+			"TESTTEAM.io.github.francisswiftbuilder.pluminon.GitCredential"
 	}
 
 	private func matchingIndexes(for query: [String: Any]) -> [Int] {
@@ -201,7 +201,7 @@ func makeTestCredentialStore(
 	GitCredentialStore(
 		service: service,
 		securityClient: securityClient,
-		accessGroupResolver: { "TESTTEAM.com.francisswiftbuilder.pluminon.GitCredential" },
+		accessGroupResolver: { "TESTTEAM.io.github.francisswiftbuilder.pluminon.GitCredential" },
 		now: now,
 		diagnosticHandler: diagnosticHandler
 	)

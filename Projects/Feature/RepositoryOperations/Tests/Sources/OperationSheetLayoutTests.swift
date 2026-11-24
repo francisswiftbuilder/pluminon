@@ -74,18 +74,17 @@ struct OperationSheetLayoutTests {
 			Task { await gate.resume(0, with: .success(snapshot)) }
 		}
 		model.didRequestFetchAll()
+		let activity = try #require(model.activity)
+		#expect(activity == .fetchAll)
 		try await gate.waitForRequests(1)
-		for _ in 0..<100 {
-			if model.presentedActivity != nil { break }
-			try await Task.sleep(for: .milliseconds(10))
-		}
-		#expect(model.presentedActivity == .fetchAll)
 		let controller = NSHostingController(
-			rootView: RepositorySyncCancelButton(viewModel: model)
-				.labelStyle(.iconOnly)
-				.padding(8)
-				.background(.bar)
-				.environment(\.colorScheme, colorScheme))
+			rootView: RepositoryActivityIndicator(
+				activity.statusDescription,
+				cancellation: (activity.cancellationLabel, model.didRequestCancelOperation)
+			)
+			.padding(8)
+			.background(.bar)
+			.environment(\.colorScheme, colorScheme))
 		let size = controller.view.fittingSize
 		let window = NSWindow(
 			contentRect: .init(origin: .zero, size: size), styleMask: [.borderless],

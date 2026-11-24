@@ -4,7 +4,7 @@
 <dict>
 	<key>keychain-access-groups</key>
 	<array>
-		<string>$(AppIdentifierPrefix)com.francisswiftbuilder.pluminon.GitCredential</string>
+		<string>$(AppIdentifierPrefix)io.github.francisswiftbuilder.pluminon.GitCredential</string>
 	</array>
 </dict>
 </plist>

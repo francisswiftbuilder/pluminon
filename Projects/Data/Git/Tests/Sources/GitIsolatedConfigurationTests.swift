@@ -347,6 +347,69 @@ struct GitIsolatedConfigurationTests {
 	}
 
 	@Test
+	func testMissingGitLFSRejectsStagingInsteadOfStoringABinaryBlob() async throws {
+		let repositoryURL = try makeTemporaryRepository()
+		defer { try? FileManager.default.removeItem(at: repositoryURL) }
+		let runner = GitProcessRunner(
+			configuration: GitProcessConfiguration(
+				runtimeURL: repositoryURL.appending(path: "runtime"),
+				globalConfigurationURL: repositoryURL.appending(path: ".git/app.config")),
+			credentialStore: GitCredentialPersistingStub(), lfsExecutableURLs: [])
+		try "*.bin filter=lfs -text\n".write(
+			to: repositoryURL.appending(path: ".gitattributes"), atomically: true, encoding: .utf8)
+		try Data([0, 1, 255]).write(to: repositoryURL.appending(path: "asset.bin"))
+
+		do {
+			_ = try await runner.requestRun(arguments: ["add", "asset.bin"], at: repositoryURL)
+			Issue.record("Staging an LFS file without Git LFS should fail")
+		} catch GitRepositoryError.commandFailed(let message) {
+			#expect(message.contains("Install git-lfs"))
+		}
+		let index = try await runner.requestRun(
+			arguments: ["ls-files", "asset.bin"], at: repositoryURL)
+		#expect(index.standardOutput.isEmpty)
+	}
+
+	@Test(
+		.enabled(
+			if: GitLFSExecutableScope.installationURLs.contains {
+				FileManager.default.isExecutableFile(atPath: $0.path)
+			}))
+	func testIsolatedGitLFSStagesAPointerAndChecksOutTheOriginalBinary() async throws {
+		let repositoryURL = try makeTemporaryRepository()
+		defer { try? FileManager.default.removeItem(at: repositoryURL) }
+		let runner = GitProcessRunner(
+			configuration: GitProcessConfiguration(
+				runtimeURL: repositoryURL.appending(path: "runtime"),
+				globalConfigurationURL: repositoryURL.appending(path: ".git/app.config")),
+			credentialStore: GitCredentialPersistingStub())
+		let assetURL = repositoryURL.appending(path: "asset.bin")
+		let contents = Data([0, 1, 255])
+		try "*.bin filter=lfs -text\n".write(
+			to: repositoryURL.appending(path: ".gitattributes"), atomically: true, encoding: .utf8)
+		try contents.write(to: assetURL)
+
+		_ = try await runner.requestRun(
+			arguments: ["add", ".gitattributes", "asset.bin"], at: repositoryURL)
+		let blob = try await runner.requestRun(arguments: ["show", ":asset.bin"], at: repositoryURL)
+		#expect(blob.standardOutput.hasPrefix("version https://git-lfs.github.com/spec/v1\n"))
+		let override = try await runner.requestRun(
+			arguments: ["config", "--local", "filter.lfs.smudge", "cat"], at: repositoryURL)
+		#expect(override.terminationStatus == 0)
+		let effective = try await runner.requestRun(
+			arguments: ["config", "--get", "filter.lfs.smudge"], at: repositoryURL)
+		#expect(effective.standardOutput == "cat\n")
+		_ = try await runner.requestRun(
+			arguments: ["config", "--local", "--unset", "filter.lfs.smudge"], at: repositoryURL)
+		_ = try await runner.requestRun(
+			arguments: ["config", "--local", "http.sslCert", "/fixture/client.pem"], at: repositoryURL)
+		try FileManager.default.removeItem(at: assetURL)
+		_ = try await runner.requestRun(
+			arguments: ["checkout", "--", "asset.bin"], at: repositoryURL, allowsLFSDownloads: true)
+		#expect(try Data(contentsOf: assetURL) == contents)
+	}
+
+	@Test
 	func testAuthenticationFailurePreservesDetailsWithoutCredentials() async throws {
 		let repositoryURL = try makeTemporaryRepository()
 		defer { try? FileManager.default.removeItem(at: repositoryURL) }

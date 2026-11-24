@@ -8,7 +8,7 @@ CACHE_DIR="$ROOT_DIR/.build/bundled-git"
 ARCHIVE="$CACHE_DIR/downloads/git-$VERSION.tar.xz"
 RUNTIME="$CACHE_DIR/runtime"
 SDK="$(xcrun --sdk macosx --show-sdk-path)"
-BUILD_KEY="$VERSION-$(shasum -a 256 "$ROOT_DIR/script/build_bundled_git.sh" "$ROOT_DIR/script/verify_bundled_git.sh" "$ROOT_DIR/script/embed_bundled_git.sh" "$ROOT_DIR/THIRD_PARTY_NOTICES.md" | shasum -a 256 | awk '{print $1}')-$(xcrun --sdk macosx --show-sdk-version)"
+BUILD_KEY="$VERSION-$(shasum -a 256 "$ROOT_DIR/script/build_bundled_git.sh" "$ROOT_DIR/script/verify_bundled_git.sh" "$ROOT_DIR/script/embed_bundled_git.sh" "$ROOT_DIR/script/InstallBundledGit.swift" "$ROOT_DIR/THIRD_PARTY_NOTICES.md" | shasum -a 256 | awk '{print $1}')-$(xcrun --sdk macosx --show-sdk-version)"
 
 if [[ -f "$RUNTIME/build-key" && "$(< "$RUNTIME/build-key")" == "$BUILD_KEY" && -x "$RUNTIME/bin/git" && -x "$RUNTIME/libexec/git-core/git-remote-https" ]]; then
 	"$RUNTIME/bin/git" --version
@@ -55,7 +55,7 @@ mkdir -p "$STAGED_RUNTIME/share/pluminon-source"
 cp "$ARCHIVE" "$STAGED_RUNTIME/share/pluminon-source/"
 cp "$0" "$STAGED_RUNTIME/share/pluminon-source/build_bundled_git.sh"
 cp "$ROOT_DIR/script/verify_bundled_git.sh" "$STAGED_RUNTIME/share/pluminon-source/"
-cp "$ROOT_DIR/script/embed_bundled_git.sh" "$STAGED_RUNTIME/share/pluminon-source/"
+cp "$ROOT_DIR/script/embed_bundled_git.sh" "$ROOT_DIR/script/InstallBundledGit.swift" "$STAGED_RUNTIME/share/pluminon-source/"
 cp "$WORK_DIR/git-$VERSION/COPYING" "$STAGED_RUNTIME/share/pluminon-source/Git-COPYING"
 cp "$ROOT_DIR/THIRD_PARTY_NOTICES.md" "$STAGED_RUNTIME/share/pluminon-source/"
 "$ROOT_DIR/script/verify_bundled_git.sh" "$STAGED_RUNTIME"

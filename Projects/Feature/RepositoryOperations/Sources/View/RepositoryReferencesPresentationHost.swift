@@ -25,6 +25,7 @@ public struct RepositoryReferencesPresentationHost<Content: View>: View {
 					startCommit: viewModel.pendingBranchStartCommit,
 					remoteStart: viewModel.pendingBranchRemote?.remoteDisplayName,
 					isLoading: viewModel.isLoading,
+					checkingOut: viewModel.switchingBranchName,
 					errorMessage: viewModel.mutationErrorMessage,
 					errorDetails: viewModel.mutationErrorDetails,
 					onCancel: viewModel.didDismissNewBranch,

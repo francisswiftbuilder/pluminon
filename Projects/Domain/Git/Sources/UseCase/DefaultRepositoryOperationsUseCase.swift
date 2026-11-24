@@ -10,10 +10,13 @@ public struct DefaultRepositoryOperationsUseCase: RepositoryOperationsUseCase {
 		self.content = content
 	}
 
-	public func rebase(onto branchName: String, at repositoryURL: URL) async throws
+	public func rebase(
+		onto branchName: String, expecting currentBranch: GitBranch, at repositoryURL: URL
+	) async throws
 		-> RepositorySnapshot
 	{
-		try await repository.requestRebase(onto: branchName, at: repositoryURL)
+		try await repository.requestRebase(
+			onto: branchName, expecting: currentBranch, at: repositoryURL)
 		return try await content.loadSnapshot(at: repositoryURL)
 	}
 

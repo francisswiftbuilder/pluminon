@@ -5,31 +5,26 @@ struct RepositoryGitHubDetailView: View {
 	private struct Request: Hashable {
 		let repository: GitHubRepository
 		let account: GitCredentialDescriptor
-		let accessRevision: Int
+		let detailsRevision: Int
 	}
 
 	let repository: GitHubRepository?
 	let account: GitCredentialDescriptor?
 	let accountViewModel: GitAccountViewModel
 
-	@State private var files: (Request, Result<[GitHubRepositoryFile], any Error>)?
-	@State private var readme: (Request, Result<Readme, any Error>)?
+	@State private var filesError: (Request, any Error)?
+	@State private var readmeError: (Request, any Error)?
 	@State private var showsAllFiles = false
 	@State private var filesRetry = 0
 	@State private var readmeRetry = 0
 
-	private struct Readme {
-		let blocks: [RepositoryReadmeView.Block]
-		let isTruncated: Bool
-	}
-
 	private let visibleFileLimit = 6
 
 	private var request: Request? {
-		guard let repository, let account else { return nil }
+		guard let repository, let account, account == accountViewModel.account else { return nil }
 		return Request(
 			repository: repository, account: account,
-			accessRevision: accountViewModel.repositoryAccessRevision)
+			detailsRevision: accountViewModel.repositoryDetailsRevision)
 	}
 
 	var body: some View {
@@ -59,6 +54,7 @@ struct RepositoryGitHubDetailView: View {
 					description: Text("View its files and README."))
 			}
 		}
+		.onChange(of: request) { showsAllFiles = false }
 		.frame(maxWidth: .infinity, maxHeight: .infinity)
 		.background { Color(nsColor: .textBackgroundColor) }
 	}
@@ -81,12 +77,10 @@ struct RepositoryGitHubDetailView: View {
 
 	@ViewBuilder
 	private func filesContent(for request: Request) -> some View {
-		if let (loadedRequest, result) = files, loadedRequest == request {
-			switch result {
-			case .success(let files): filesSection(files)
-			case .failure(let error):
-				failedSection("Files", error: error) { filesRetry += 1 }
-			}
+		if let files = accountViewModel.cachedRepositoryFiles(for: request.repository) {
+			filesSection(files)
+		} else if let (failedRequest, error) = filesError, failedRequest == request {
+			failedSection("Files", error: error) { filesRetry += 1 }
 		} else {
 			ProgressView("Loading Files…").controlSize(.small)
 		}
@@ -94,12 +88,10 @@ struct RepositoryGitHubDetailView: View {
 
 	@ViewBuilder
 	private func readmeContent(for request: Request) -> some View {
-		if let (loadedRequest, result) = readme, loadedRequest == request {
-			switch result {
-			case .success(let readme): readmeSection(readme, repository: request.repository)
-			case .failure(let error):
-				failedSection("README", error: error) { readmeRetry += 1 }
-			}
+		if let readme = accountViewModel.cachedRepositoryReadme(for: request.repository) {
+			readmeSection(readme, repository: request.repository)
+		} else if let (failedRequest, error) = readmeError, failedRequest == request {
+			failedSection("README", error: error) { readmeRetry += 1 }
 		} else {
 			ProgressView("Loading README…").controlSize(.small)
 		}
@@ -143,7 +135,9 @@ struct RepositoryGitHubDetailView: View {
 			.truncationMode(.middle)
 	}
 
-	private func readmeSection(_ readme: Readme, repository: GitHubRepository) -> some View {
+	private func readmeSection(
+		_ readme: GitAccountViewModel.RepositoryReadme, repository: GitHubRepository
+	) -> some View {
 		VStack(alignment: .leading, spacing: 8) {
 			Text("README").font(.headline)
 			if !readme.blocks.isEmpty {
@@ -158,43 +152,28 @@ struct RepositoryGitHubDetailView: View {
 	}
 
 	private func loadFiles(for request: Request) async {
-		if files?.0 != request { showsAllFiles = false }
-		files = nil
+		filesError = nil
 		do {
-			let result = try await accountViewModel.loadRepositoryFiles(
+			try await accountViewModel.loadRepositoryFiles(
 				for: request.repository, account: request.account)
-			try Task.checkCancellation()
-			files = (request, .success(result))
 		} catch is CancellationError {
 			return
 		} catch {
 			guard !Task.isCancelled else { return }
-			files = (request, .failure(error))
+			filesError = (request, error)
 		}
 	}
 
 	private func loadReadme(for request: Request) async {
-		readme = nil
-		let repository = request.repository
+		readmeError = nil
 		do {
-			let result = try await accountViewModel.loadRepositoryReadme(
-				for: repository, account: request.account)
-			let blocks: [RepositoryReadmeView.Block]
-			if let markdown = result.markdown, !markdown.isEmpty {
-				let baseURL = repository.webURL
-					.appending(
-						path: "blob/\(repository.defaultBranch ?? "HEAD")", directoryHint: .isDirectory)
-				blocks = try await RepositoryReadmeView.prepare(markdown: markdown, baseURL: baseURL)
-			} else {
-				blocks = []
-			}
-			try Task.checkCancellation()
-			readme = (request, .success(Readme(blocks: blocks, isTruncated: result.isTruncated)))
+			try await accountViewModel.loadRepositoryReadme(
+				for: request.repository, account: request.account)
 		} catch is CancellationError {
 			return
 		} catch {
 			guard !Task.isCancelled else { return }
-			readme = (request, .failure(error))
+			readmeError = (request, error)
 		}
 	}
 }

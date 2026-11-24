@@ -800,13 +800,53 @@ struct GitReferenceMutationTests {
 
 		switch resolution {
 		case .merge:
-			try await context.repository.requestMergeBranch(named: "destination", at: context.url)
+			try await context.repository.requestMergeBranch(
+				named: "destination", expecting: requestCurrentBranch(in: context), at: context.url)
 		case .rebase:
-			try await context.repository.requestRebase(onto: "destination", at: context.url)
+			try await context.repository.requestRebase(
+				onto: "destination", expecting: requestCurrentBranch(in: context), at: context.url)
 		}
 
 		let ancestor = try await run(["merge-base", destination, "HEAD"], in: context)
 		#expect(ancestor == destination)
+	}
+
+	@Test(arguments: [false, true])
+	func branchMutationsRejectChangedCheckoutOrHead(changeCheckout: Bool) async throws {
+		let context = try await makeContext()
+		let remote = try await makeRemote(in: context)
+		let reviewed = try await requestCurrentBranch(in: context)
+		_ = try await run(["switch", "-c", "incoming"], in: context)
+		try Data("incoming".utf8).write(to: context.url.appending(path: "incoming.txt"))
+		_ = try await run(["add", "incoming.txt"], in: context)
+		_ = try await run(["commit", "-m", "incoming"], in: context)
+		_ = try await run(["switch", reviewed.name], in: context)
+		if changeCheckout {
+			_ = try await run(["switch", "-c", "other"], in: context)
+		}
+		_ = try await run(["commit", "--allow-empty", "-m", "moved HEAD"], in: context)
+		let actual = try await requestCurrentBranch(in: context)
+
+		await #expect(throws: GitRepositoryError.self) {
+			try await context.repository.requestMergeBranch(
+				named: "incoming", expecting: reviewed, at: context.url)
+		}
+		await #expect(throws: GitRepositoryError.self) {
+			try await context.repository.requestRebase(
+				onto: "incoming", expecting: reviewed, at: context.url)
+		}
+		await #expect(throws: GitRepositoryError.self) {
+			try await context.repository.requestPush(
+				.setUpstream(remoteName: "origin", branchName: reviewed.name),
+				expecting: reviewed, at: context.url)
+		}
+
+		let branch = try await requestCurrentBranch(in: context)
+		#expect(branch.name == actual.name)
+		#expect(branch.hash == actual.hash)
+		#expect(try await context.repository.requestOperationState(at: context.url).isIdle)
+		let remoteRefs = try await context.runner.requestRun(arguments: ["for-each-ref"], at: remote)
+		#expect(remoteRefs.standardOutput.isEmpty)
 	}
 
 	@Test(arguments: [RepositoryPullResolution.merge, .rebase])
@@ -1426,7 +1466,8 @@ struct GitReferenceMutationTests {
 		_ = try await run(["switch", original], in: context)
 		try Data("current\n".utf8).write(to: file)
 		_ = try await run(["commit", "-am", "current change"], in: context)
-		try await context.repository.requestMergeBranch(named: "incoming", at: context.url)
+		try await context.repository.requestMergeBranch(
+			named: "incoming", expecting: requestCurrentBranch(in: context), at: context.url)
 		return try #require(
 			try await context.repository.requestOperationState(at: context.url).conflicts.first)
 	}

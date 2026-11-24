@@ -9,11 +9,11 @@ extension Array: TargetScripts where Element == TargetScript {
 				name: "Embed Bundled Git",
 				inputPaths: [
 					"$(SRCROOT)/../../script/embed_bundled_git.sh",
+					"$(SRCROOT)/../../script/InstallBundledGit.swift",
 					"$(SRCROOT)/../../.build/bundled-git/runtime/",
 				],
 				outputPaths: [
-					"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/Git/",
-					"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Helpers/Git/",
+					"$(TARGET_BUILD_DIR)/$(CONTENTS_FOLDER_PATH)/Resources/Git/"
 				],
 				basedOnDependencyAnalysis: false
 			),

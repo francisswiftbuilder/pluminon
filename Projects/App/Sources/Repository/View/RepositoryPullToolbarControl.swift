@@ -9,16 +9,12 @@ struct RepositoryPullToolbarControl: View {
 	}
 
 	var body: some View {
-		if viewModel.presentedActivity?.isPull == true {
-			RepositorySyncCancelButton(viewModel: viewModel)
-		} else {
-			Button {
-				viewModel.didRequestPull()
-			} label: {
-				Label("Pull", systemImage: "arrow.down")
-			}
-			.disabled(!viewModel.canPull)
-			.help("Pull Current Branch")
+		Button {
+			viewModel.didRequestPull()
+		} label: {
+			Label("Pull", systemImage: "arrow.down")
 		}
+		.disabled(!viewModel.canPull)
+		.help("Pull Current Branch")
 	}
 }

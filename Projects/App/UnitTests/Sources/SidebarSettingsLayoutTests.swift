@@ -193,7 +193,8 @@ struct SidebarSettingsLayoutTests {
 		window.makeKeyAndOrderFront(nil)
 		controller.rootView = AnyView(
 			RepositoryWelcomeContainerView(
-				accountViewModel: account, repositories: [], isWorking: false, onOpenRepository: {},
+				source: .remote, accountViewModel: account, repositories: [], isWorking: false,
+				onOpenRepository: {},
 				onOpenSavedRepository: { _ in }, onCloneRepository: { _ in }, onCancel: {}
 			)
 			.frame(width: size.width, height: size.height)
@@ -246,7 +247,6 @@ struct SidebarSettingsLayoutTests {
 		}
 
 		let table = try #require(repositoryTable(in: controller.view))
-		try #require(window.makeFirstResponder(table))
 		#expect(table.selectedRow == 0)
 		let firstRow = controller.view.convert(table.rect(ofRow: 0), from: table)
 		let searchBounds = controller.view.convert(searchField.bounds, from: searchField)
@@ -268,7 +268,8 @@ struct SidebarSettingsLayoutTests {
 		window.makeKeyAndOrderFront(nil)
 		controller.rootView = AnyView(
 			RepositoryWelcomeContainerView(
-				accountViewModel: account, repositories: [], isWorking: false, onOpenRepository: {},
+				source: .remote, accountViewModel: account, repositories: [], isWorking: false,
+				onOpenRepository: {},
 				onOpenSavedRepository: { _ in }, onCloneRepository: { cloneRequests.append($0) },
 				onCancel: {}
 			)
@@ -323,7 +324,8 @@ struct SidebarSettingsLayoutTests {
 					viewModel: workspace.viewModel, operationViewModel: workspace.operationViewModel,
 					referencesViewModel: workspace.referencesViewModel,
 					syncViewModel: workspace.syncViewModel,
-					remotesViewModel: workspace.remotesViewModel, onCreateBranch: {})
+					remotesViewModel: workspace.remotesViewModel, allowsRepositoryActions: true,
+					onCreateBranch: {})
 			}
 			.toolbarRole(.editor)
 			.frame(minWidth: width, minHeight: 520))
