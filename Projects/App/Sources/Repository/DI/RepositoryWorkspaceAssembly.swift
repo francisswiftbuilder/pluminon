@@ -409,7 +409,7 @@ final class RepositoryWorkspaceAssembly {
 				viewConflicts: operationViewModel.didViewConflicts,
 				performOperationAction: operationViewModel.didPerformOperationAction,
 				presentOperationAction: operationViewModel.didPresentOperationAction,
-				rebase: operationViewModel.didRequestRebase,
+				rebase: { operationViewModel.didRequestRebase(onto: $0) },
 				renameBranch: referencesViewModel.didPresentBranchRename,
 				cherryPick: operationViewModel.didPresentCherryPick,
 				revert: operationViewModel.didPresentRevert,

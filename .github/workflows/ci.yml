@@ -35,6 +35,7 @@ jobs:
         run: git diff --exit-code
       - name: Build & test
         run: |
+          command -v git-lfs >/dev/null || brew install git-lfs
           make bundled-git
           ./script/test_bundled_git.sh .build/bundled-git/runtime
           ./script/build_workspace_modules.sh Debug

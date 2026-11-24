@@ -13,13 +13,12 @@ if [[ ! -x "$RUNTIME/bin/git" ]]; then
 	printf 'Bundled Git is missing. Run make bundled-git before building Pluminon.\n' >&2
 	exit 1
 fi
-for previous in "$DESTINATION" "$APP_BUNDLE/Contents/Helpers/Git"; do
-	if [[ -e "$previous" ]]; then
-		/bin/rm -rf "$previous"
-	fi
-done
-mkdir -p "$DESTINATION"
-/usr/bin/ditto "$RUNTIME" "$DESTINATION"
+DESTINATION_PARENT="$(dirname "$DESTINATION")"
+mkdir -p "$DESTINATION_PARENT"
+WORK_DIR="$(mktemp -d "$(dirname "$APP_BUNDLE")/.pluminon-git-embed.XXXXXX")"
+trap '/bin/rm -rf "$WORK_DIR"' EXIT
+STAGED_RUNTIME="$WORK_DIR/Git"
+/usr/bin/ditto "$RUNTIME" "$STAGED_RUNTIME"
 IDENTITY="${EXPANDED_CODE_SIGN_IDENTITY:--}"
 if [[ "${CODE_SIGNING_ALLOWED:-NO}" == NO || -z "$IDENTITY" ]]; then
 	IDENTITY=-
@@ -28,4 +27,8 @@ while IFS= read -r -d '' binary; do
 	if /usr/bin/file -b "$binary" | /usr/bin/grep -q 'Mach-O'; then
 		/usr/bin/codesign --force --sign "$IDENTITY" "$binary"
 	fi
-done < <(find "$DESTINATION/bin" "$DESTINATION/libexec" -type f -print0)
+done < <(find "$STAGED_RUNTIME/bin" "$STAGED_RUNTIME/libexec" -type f -print0)
+/usr/bin/swift "$ROOT_DIR/script/InstallBundledGit.swift" "$STAGED_RUNTIME" "$DESTINATION"
+if [[ -d "$APP_BUNDLE/Contents/Helpers/Git" ]]; then
+	/bin/rm -rf "$APP_BUNDLE/Contents/Helpers/Git"
+fi

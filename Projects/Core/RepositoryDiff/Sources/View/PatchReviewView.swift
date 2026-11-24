@@ -25,7 +25,7 @@ public struct PatchReviewView: View {
 				LoadingStateView(title: "Loading Change")
 			} else if let presentation = viewerModel.presentation, !presentation.document.lines.isEmpty {
 				DiffUnifiedView(
-					document: presentation.document,
+					document: presentation.document, hunks: presentation.hunks,
 					filePath: path, searchModel: searchModel, lineAction: nil, hunkActions: [],
 					isApplyingAction: false, onApplyLine: { _, _ in }, onApplyHunk: { _, _ in })
 			} else {

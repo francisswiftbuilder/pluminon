@@ -822,6 +822,7 @@ struct GitOutputParserTests {
 
 		try await LocalGitRepository().requestMergeBranch(
 			named: "feature/merge",
+			expecting: currentBranchSnapshot(at: repositoryURL),
 			at: repositoryURL
 		)
 
@@ -1113,7 +1114,8 @@ struct GitOutputParserTests {
 		try requestRunGit(["commit", "--quiet", "-m", "Base change"], at: repositoryURL)
 
 		let repository = LocalGitRepository()
-		try await repository.requestMergeBranch(named: "conflict", at: repositoryURL)
+		try await repository.requestMergeBranch(
+			named: "conflict", expecting: currentBranchSnapshot(at: repositoryURL), at: repositoryURL)
 		let operationState = try await repository.requestOperationState(at: repositoryURL)
 		#expect(operationState.operation?.kind == .merge)
 		#expect(operationState.conflicts.count == 1)
@@ -1204,7 +1206,8 @@ struct GitOutputParserTests {
 		try requestRunGit(["switch", baseBranch], at: repositoryURL)
 		try commit(contents: "current", message: "Current change", at: repositoryURL)
 
-		try await LocalGitRepository().requestMergeBranch(named: "conflict", at: repositoryURL)
+		try await LocalGitRepository().requestMergeBranch(
+			named: "conflict", expecting: currentBranchSnapshot(at: repositoryURL), at: repositoryURL)
 		let restoredState = try await LocalGitRepository().requestOperationState(at: repositoryURL)
 		let conflict = try #require(restoredState.conflicts.first)
 		#expect(restoredState.operation?.kind == .merge)
@@ -1240,7 +1243,8 @@ struct GitOutputParserTests {
 		try requestRunGit(["switch", "feature"], at: repositoryURL)
 
 		let repository = LocalGitRepository()
-		try await repository.requestRebase(onto: baseBranch, at: repositoryURL)
+		try await repository.requestRebase(
+			onto: baseBranch, expecting: currentBranchSnapshot(at: repositoryURL), at: repositoryURL)
 		let activeState = try await repository.requestOperationState(at: repositoryURL)
 		#expect(activeState.operation?.kind == .rebase)
 		#expect(activeState.hasConflicts)
@@ -1263,7 +1267,8 @@ struct GitOutputParserTests {
 		try requestRunGit(["switch", "feature"], at: repositoryURL)
 		let repository = LocalGitRepository()
 
-		try await repository.requestRebase(onto: baseBranch, at: repositoryURL)
+		try await repository.requestRebase(
+			onto: baseBranch, expecting: currentBranchSnapshot(at: repositoryURL), at: repositoryURL)
 		let conflictedState = try await repository.requestOperationState(at: repositoryURL)
 		let conflict = try #require(conflictedState.conflicts.first)
 		try await repository.requestResolveConflict(
@@ -1294,7 +1299,8 @@ struct GitOutputParserTests {
 		try requestRunGit(["switch", "feature"], at: repositoryURL)
 		let repository = LocalGitRepository()
 
-		try await repository.requestRebase(onto: baseBranch, at: repositoryURL)
+		try await repository.requestRebase(
+			onto: baseBranch, expecting: currentBranchSnapshot(at: repositoryURL), at: repositoryURL)
 		try await repository.requestPerformOperationAction(.skip, for: .rebase, at: repositoryURL)
 
 		let state = try await repository.requestOperationState(at: repositoryURL)
@@ -1753,6 +1759,11 @@ struct GitOutputParserTests {
 			else { return nil }
 			return GitDiffHunkSelection(oldStartLine: oldStart, newStartLine: newStart)
 		}
+	}
+
+	private func currentBranchSnapshot(at repositoryURL: URL) async throws -> GitBranch {
+		try #require(
+			try await LocalGitRepository().requestBranches(at: repositoryURL).first(where: \.isCurrent))
 	}
 
 	private func currentBranch(at repositoryURL: URL) throws -> String {

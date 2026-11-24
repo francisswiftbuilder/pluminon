@@ -104,8 +104,10 @@ public protocol GitRepository: Sendable {
 		-> GitBranchDeletionOutcome
 	func requestRenameBranch(named name: String, to newName: String, at repositoryURL: URL)
 		async throws
-	func requestMergeBranch(named name: String, at repositoryURL: URL) async throws
-	func requestRebase(onto branchName: String, at repositoryURL: URL) async throws
+	func requestMergeBranch(
+		named name: String, expecting currentBranch: GitBranch, at repositoryURL: URL) async throws
+	func requestRebase(
+		onto branchName: String, expecting currentBranch: GitBranch, at repositoryURL: URL) async throws
 	func requestCherryPick(commitHash: String, mainline: Int?, at repositoryURL: URL) async throws
 	func requestRevert(commitHash: String, mainline: Int?, at repositoryURL: URL) async throws
 	func requestResolveConflict(
@@ -162,7 +164,9 @@ public protocol GitRepository: Sendable {
 		using resolution: RepositoryPullResolution,
 		at repositoryURL: URL
 	) async throws
-	func requestPush(_ target: GitPushTarget, at repositoryURL: URL) async throws
+	func requestPush(
+		_ target: GitPushTarget, expecting currentBranch: GitBranch?, at repositoryURL: URL)
+		async throws
 	func requestForcePush(
 		_ target: GitPushTarget, expecting branch: GitBranch, remotes: [GitRemote],
 		at repositoryURL: URL

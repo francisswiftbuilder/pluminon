@@ -5,13 +5,16 @@ import SwiftUI
 public struct RemotesView: View {
 	private let viewModel: RemotesViewModel
 	private let syncViewModel: RepositorySyncViewModel
+	private let isRepositoryMutating: Bool
 
 	public init(
 		viewModel: RemotesViewModel,
-		syncViewModel: RepositorySyncViewModel
+		syncViewModel: RepositorySyncViewModel,
+		isRepositoryMutating: Bool = false
 	) {
 		self.viewModel = viewModel
 		self.syncViewModel = syncViewModel
+		self.isRepositoryMutating = isRepositoryMutating
 	}
 
 	public var body: some View {
@@ -70,6 +73,7 @@ public struct RemotesView: View {
 			) {
 				viewModel.didPresentAddRemote()
 			}
+			.disabled(isRepositoryMutating)
 		}
 	}
 }

@@ -3,7 +3,9 @@ import SwiftUI
 
 struct DiffUnifiedView: View {
 	@Environment(\.accessibilityReduceMotion) private var reduceMotion
+	@State private var scrollPosition = ScrollPosition()
 	let document: DiffDocument
+	let hunks: [DiffHunk]
 	let filePath: String?
 	let searchModel: RepositorySearchViewModel
 	let lineAction: GitDiffLineAction?
@@ -14,42 +16,70 @@ struct DiffUnifiedView: View {
 
 	var body: some View {
 		GeometryReader { geometry in
-			ScrollViewReader { proxy in
-				ScrollView([.horizontal, .vertical]) {
-					LazyVStack(alignment: .leading, spacing: 0) {
-						ForEach(document.lines) { line in
-							DiffLineView(
-								line: line,
-								filePath: filePath,
-								searchText: searchModel.query,
-								activeSearchRange: searchModel.activeRange(for: line.id),
-								showsOldLineNumbers: document.showsOldLineNumbers,
-								showsNewLineNumbers: document.showsNewLineNumbers,
-								lineAction: lineAction,
-								hunkActions: hunkActions,
-								isLoading: isApplyingAction,
-								onApplyLine: onApplyLine,
-								onApplyHunk: onApplyHunk
-							)
-							.id(line.id)
+			let showsOldLineNumbers = document.showsOldLineNumbers
+			let showsNewLineNumbers = document.showsNewLineNumbers
+			let lineNumberWidth: CGFloat =
+				(showsOldLineNumbers ? 46.0 : 0) + (showsNewLineNumbers ? 46 : 0)
+
+			ScrollView(.vertical) {
+				LazyVStack(alignment: .leading, spacing: 0) {
+					ForEach(hunks) { hunk in
+						if let header = hunk.header {
+							lineView(header, showsOldLineNumbers: false, showsNewLineNumbers: false)
+						}
+						if !hunk.lines.isEmpty {
+							let width = max(hunk.oldTextWidth, hunk.newTextWidth) + lineNumberWidth + 80
+							ScrollView(.horizontal) {
+								LazyVStack(alignment: .leading, spacing: 0) {
+									ForEach(hunk.lines) { line in
+										lineView(
+											line, showsOldLineNumbers: showsOldLineNumbers,
+											showsNewLineNumbers: showsNewLineNumbers
+										)
+									}
+								}
+								.frame(width: max(geometry.size.width, width), alignment: .leading)
+								.textSelection(.enabled)
+							}
+							.defaultScrollAnchor(.leading)
 						}
 					}
-					.textSelection(.enabled)
-					.padding(.vertical, 8)
-					.frame(minWidth: max(geometry.size.width, 0), alignment: .leading)
 				}
-				.defaultScrollAnchor(.topLeading)
-				.onChange(of: searchModel.currentMatchID) { _, _ in
-					guard let sourceID = searchModel.currentMatch?.sourceID else { return }
-					if reduceMotion {
-						proxy.scrollTo(sourceID, anchor: .center)
-					} else {
-						withAnimation(.easeInOut(duration: 0.15)) {
-							proxy.scrollTo(sourceID, anchor: .center)
-						}
+				.padding(.vertical, DiffHunk.verticalPadding)
+				.frame(maxWidth: .infinity, alignment: .leading)
+			}
+			.scrollPosition($scrollPosition)
+			.onChange(of: searchModel.currentMatchID) { _, _ in
+				guard let sourceID = searchModel.currentMatch?.sourceID,
+					let center = DiffHunk.verticalCenter(of: sourceID, in: hunks, mode: .unified)
+				else { return }
+				let offset = max(0, center - geometry.size.height / 2)
+				if reduceMotion {
+					scrollPosition.scrollTo(y: offset)
+				} else {
+					withAnimation(.easeInOut(duration: 0.15)) {
+						scrollPosition.scrollTo(y: offset)
 					}
 				}
 			}
 		}
+	}
+
+	private func lineView(
+		_ line: DiffLine, showsOldLineNumbers: Bool, showsNewLineNumbers: Bool
+	) -> some View {
+		DiffLineView(
+			line: line,
+			filePath: filePath,
+			searchText: searchModel.query,
+			activeSearchRange: searchModel.activeRange(for: line.id),
+			showsOldLineNumbers: showsOldLineNumbers,
+			showsNewLineNumbers: showsNewLineNumbers,
+			lineAction: lineAction,
+			hunkActions: hunkActions,
+			isLoading: isApplyingAction,
+			onApplyLine: onApplyLine,
+			onApplyHunk: onApplyHunk
+		)
 	}
 }

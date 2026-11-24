@@ -1,5 +1,7 @@
+import AppKit
 import DomainGitInterface
 import Foundation
+import SwiftUI
 import Testing
 
 @testable import CoreRepositoryDiff
@@ -55,7 +57,7 @@ struct DiffPresentationContractTests {
 		#expect(!(model.isParsing))
 		#expect(!(model.presentation?.document.lines.isEmpty == true))
 		#expect(
-			!(model.presentation?.sideBySideRows.isEmpty == true),
+			model.presentation?.hunks.contains { !$0.sideBySideRows.isEmpty } == true,
 			"Both layouts must be ready after one parse, so switching layout needs no work")
 	}
 
@@ -77,7 +79,7 @@ struct DiffPresentationContractTests {
 		#expect(model.canInteract(with: input))
 		#expect(model.presentation?.input == input)
 		#expect(!(model.presentation?.document.lines.isEmpty == true))
-		#expect(!(model.presentation?.sideBySideRows.isEmpty == true))
+		#expect(model.presentation?.hunks.contains { !$0.sideBySideRows.isEmpty } == true)
 	}
 
 	@Test
@@ -208,7 +210,7 @@ struct DiffPresentationContractTests {
 	func testLayoutChangeKeepsCallerOwnedSearchState() async throws {
 		let searchModel = RepositorySearchViewModel()
 		let document = DiffDocument(lines: DiffParser.parse(Self.diff(lineCount: 8)))
-		let sideBySideRows = DiffSideBySideBuilder.build(from: document)
+		let hunks = try DiffHunk.build(from: document)
 		searchModel.update(
 			sources: document.lines.map {
 				RepositorySearchSource(id: $0.id, text: $0.sourceText)
@@ -222,7 +224,7 @@ struct DiffPresentationContractTests {
 		let sideBySide = DiffViewer(
 			searchModel: searchModel,
 			document: document,
-			sideBySideRows: sideBySideRows,
+			hunks: hunks,
 			presentationMode: .sideBySide,
 			filePath: "Sources/App.swift",
 			lineAction: nil,
@@ -234,7 +236,7 @@ struct DiffPresentationContractTests {
 		let unified = DiffViewer(
 			searchModel: searchModel,
 			document: document,
-			sideBySideRows: sideBySideRows,
+			hunks: hunks,
 			presentationMode: .unified,
 			filePath: "Sources/App.swift",
 			lineAction: nil,
@@ -248,6 +250,108 @@ struct DiffPresentationContractTests {
 		#expect(unified.searchModel === searchModel)
 		#expect(searchModel.query == "added")
 		#expect(searchModel.currentMatch == selectedMatch)
+	}
+
+	@Test(arguments: [DiffPresentationMode.unified, .sideBySide])
+	func longLinesScrollIndependentlyInEachHunk(mode: DiffPresentationMode) async throws {
+		let wideLine = String(repeating: "0123456789", count: 40)
+		let model = DiffViewerViewModel()
+		await model.update(
+			diff: """
+				@@ -1,2 +1,2 @@
+				 first context
+				-previous \(wideLine)
+				+current \(wideLine)
+				@@ -8,2 +8,2 @@
+				 second context
+				-removed \(wideLine)
+				+added \(wideLine)
+				""")
+		let presentation = try #require(model.presentation)
+		#expect(presentation.hunks.count == 2)
+		let expectedCount = mode == .unified ? 2 : 4
+		try await withHostedDiff(presentation, mode: mode, height: 320) { view, _ in
+			try await waitUntil {
+				view.layoutSubtreeIfNeeded()
+				return horizontalScrollViews(in: view).count == expectedCount
+			}
+			let scrollViews = horizontalScrollViews(in: view)
+			try #require(scrollViews.count == expectedCount)
+			let first = scrollViews[0]
+			first.contentView.scroll(to: CGPoint(x: 240, y: 0))
+			first.reflectScrolledClipView(first.contentView)
+			#expect(first.contentView.bounds.minX > 200)
+			for other in scrollViews.dropFirst() {
+				#expect(abs(other.contentView.bounds.minX) < 1)
+			}
+		}
+	}
+
+	@Test(arguments: [DiffPresentationMode.unified, .sideBySide])
+	func findingALineInsideAHorizontallyScrollableHunkMovesTheVerticalViewport(
+		mode: DiffPresentationMode
+	) async throws {
+		let model = DiffViewerViewModel()
+		let filler = (1...32).map { " context \($0)" }
+		let line = String(repeating: "wide code ", count: 40) + "unique find target"
+		let patch = (["@@ -1,32 +1,33 @@"] + filler + ["+\(line)"]).joined(separator: "\n")
+		await model.update(diff: patch)
+		let presentation = try #require(model.presentation)
+		try await withHostedDiff(presentation, mode: mode, height: 200) { view, searchModel in
+			try await waitUntil {
+				view.layoutSubtreeIfNeeded()
+				return !horizontalScrollViews(in: view).isEmpty
+			}
+			let vertical = try #require(
+				scrollViews(in: view).first { scroll in
+					(scroll.documentView?.frame.height ?? 0) > scroll.contentSize.height + 100
+				})
+			#expect(vertical.documentVisibleRect.minY < 1)
+			searchModel.query = "unique find target"
+			try await waitUntil {
+				searchModel.currentMatch != nil && vertical.documentVisibleRect.minY > 350
+			}
+			#expect(vertical.documentVisibleRect.minY > 350)
+		}
+	}
+
+	private func withHostedDiff(
+		_ presentation: DiffViewerViewModel.Presentation, mode: DiffPresentationMode, height: CGFloat,
+		_ check: (NSView, RepositorySearchViewModel) async throws -> Void
+	) async throws {
+		let searchModel = RepositorySearchViewModel()
+		let controller = NSHostingController(
+			rootView: DiffViewer(
+				searchModel: searchModel, document: presentation.document,
+				hunks: presentation.hunks, presentationMode: mode, filePath: "Sources/App.swift",
+				lineAction: nil, hunkActions: [], isApplyingAction: false,
+				onApplyLine: { _, _ in }, onApplyHunk: { _, _ in }
+			).frame(width: 620, height: height))
+		let window = NSWindow(
+			contentRect: CGRect(x: 0, y: 0, width: 620, height: height),
+			styleMask: [.borderless], backing: .buffered, defer: false)
+		window.isReleasedWhenClosed = false
+		window.contentViewController = controller
+		controller.viewWillAppear()
+		controller.viewDidAppear()
+		defer {
+			controller.viewWillDisappear()
+			controller.viewDidDisappear()
+			window.close()
+		}
+		try await check(controller.view, searchModel)
+	}
+
+	private func horizontalScrollViews(in view: NSView) -> [NSScrollView] {
+		scrollViews(in: view).filter { scroll in
+			(scroll.documentView?.frame.width ?? 0) > scroll.contentSize.width + 100
+		}
+	}
+
+	private func scrollViews(in view: NSView) -> [NSScrollView] {
+		let nested = view.subviews.flatMap { scrollViews(in: $0) }
+		guard let scrollView = view as? NSScrollView else { return nested }
+		return [scrollView] + nested
 	}
 
 	@Test
@@ -284,7 +388,7 @@ struct DiffPresentationContractTests {
 		try await waitUntil(timeout: .seconds(20)) { model.isParsing == false }
 
 		#expect(model.presentation?.document.lines.count == lineCount + 1)
-		#expect(!(model.presentation?.sideBySideRows.isEmpty == true))
+		#expect(model.presentation?.hunks.contains { !$0.sideBySideRows.isEmpty } == true)
 		let callCount = await gate.callCount(of: label)
 		#expect(callCount == 1, "A single selection must issue a single diff request")
 	}

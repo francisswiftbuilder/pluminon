@@ -102,6 +102,7 @@ public final class RepositoryOperationViewModel {
 
 	public func canMergeBranch(_ branch: GitBranch) -> Bool {
 		currentBranch != nil
+			&& currentBranch?.name != branch.name
 			&& !branch.isCurrent
 			&& operationState.isIdle
 			&& !operationState.isDetached
@@ -146,20 +147,29 @@ public final class RepositoryOperationViewModel {
 		pendingMainlineAction = nil
 	}
 
-	public func didRequestMergeBranch(_ branch: GitBranch) {
-		guard let repositoryURL = repositoryURL(), canMergeBranch(branch) else { return }
+	public func didRequestMergeBranch(_ branch: GitBranch, expecting reviewedBranch: GitBranch? = nil)
+	{
+		guard let repositoryURL = repositoryURL(), let currentBranch = reviewedBranch ?? currentBranch,
+			canMergeBranch(branch)
+		else {
+			return
+		}
 		let referencesUseCase = referencesUseCase
 		requestMutation {
-			try await referencesUseCase.mergeBranch(named: branch.name, at: repositoryURL)
+			try await referencesUseCase.mergeBranch(
+				named: branch.name, expecting: currentBranch, at: repositoryURL)
 		}
 	}
 
-	public func didRequestRebase(onto branch: GitBranch) {
-		guard let repositoryURL = repositoryURL(), canRebaseOnto(branch), let operationsUseCase else {
+	public func didRequestRebase(onto branch: GitBranch, expecting reviewedBranch: GitBranch? = nil) {
+		guard let repositoryURL = repositoryURL(), let currentBranch = reviewedBranch ?? currentBranch,
+			canRebaseOnto(branch), let operationsUseCase
+		else {
 			return
 		}
 		requestMutation {
-			try await operationsUseCase.rebase(onto: branch.name, at: repositoryURL)
+			try await operationsUseCase.rebase(
+				onto: branch.name, expecting: currentBranch, at: repositoryURL)
 		}
 	}
 

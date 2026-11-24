@@ -7,7 +7,7 @@ import Observation
 @Observable
 public final class RepositorySyncViewModel {
 	private static let logger = Logger(
-		subsystem: Bundle.main.bundleIdentifier ?? "com.francisswiftbuilder.pluminon",
+		subsystem: Bundle.main.bundleIdentifier ?? "io.github.francisswiftbuilder.pluminon",
 		category: "RepositorySync")
 
 	public struct Actions {
@@ -48,7 +48,7 @@ public final class RepositorySyncViewModel {
 		}
 	}
 
-	public enum Activity: Equatable {
+	public enum Activity: Equatable, Sendable {
 		case fetchAll
 		case fetchRemote(String)
 		case pull(String?)
@@ -86,36 +86,11 @@ public final class RepositorySyncViewModel {
 			}
 		}
 
-		public var isFetch: Bool {
-			switch self {
-			case .fetchAll, .fetchRemote:
-				true
-			case .pull, .push, .forcePush, .pushTags:
-				false
-			}
-		}
-
-		public var isPull: Bool {
-			if case .pull = self {
-				return true
-			}
-			return false
-		}
-
-		public var isPush: Bool {
-			switch self {
-			case .push, .forcePush, .pushTags:
-				true
-			case .fetchAll, .fetchRemote, .pull:
-				false
-			}
-		}
 	}
 
 	var pendingPullDivergence: RepositoryPullDivergence?
 	var pendingConfirmation: RepositorySyncConfirmation?
 	public private(set) var activity: Activity?
-	public private(set) var presentedActivity: Activity?
 	private var state = RepositorySyncState.empty
 
 	private let dependencies: Dependencies
@@ -123,7 +98,6 @@ public final class RepositorySyncViewModel {
 	private var currentBranch: GitBranch?
 	private var operationState: RepositoryOperationState = .normal
 	@ObservationIgnored private var networkTask: Task<Void, Never>?
-	@ObservationIgnored private var activityPresentationTask: Task<Void, Never>?
 	@ObservationIgnored private var automaticFetchTask: Task<Void, Never>?
 	private var isAutomaticFetch = false
 	private var forcePushContext: (repositoryURL: URL, branch: GitBranch, remotes: [GitRemote])?
@@ -140,7 +114,6 @@ public final class RepositorySyncViewModel {
 
 	deinit {
 		networkTask?.cancel()
-		activityPresentationTask?.cancel()
 		automaticFetchTask?.cancel()
 	}
 
@@ -194,13 +167,10 @@ public final class RepositorySyncViewModel {
 	public func reset() {
 		networkTask?.cancel()
 		networkTask = nil
-		activityPresentationTask?.cancel()
-		activityPresentationTask = nil
 		activeNetworkRequestID = nil
 		pendingPullDivergence = nil
 		pendingConfirmation = nil
 		activity = nil
-		presentedActivity = nil
 		currentBranch = nil
 		operationState = .normal
 		state = .empty
@@ -212,11 +182,8 @@ public final class RepositorySyncViewModel {
 		updateAutomaticFetching(isActive: false)
 		networkTask?.cancel()
 		networkTask = nil
-		activityPresentationTask?.cancel()
-		activityPresentationTask = nil
 		activeNetworkRequestID = nil
 		activity = nil
-		presentedActivity = nil
 		isAutomaticFetch = false
 	}
 
@@ -487,38 +454,15 @@ public final class RepositorySyncViewModel {
 		networkRequestSequence += 1
 		activeNetworkRequestID = networkRequestSequence
 		self.activity = activity
-		presentActivityAfterDelay(activity, requestID: networkRequestSequence)
 		return networkRequestSequence
 	}
 
 	private func finishNetworkRequest(id: Int) {
 		guard activeNetworkRequestID == id else { return }
 		networkTask = nil
-		activityPresentationTask?.cancel()
-		activityPresentationTask = nil
 		activeNetworkRequestID = nil
 		activity = nil
-		presentedActivity = nil
 		isAutomaticFetch = false
-	}
-
-	private func presentActivityAfterDelay(_ activity: Activity, requestID: Int) {
-		activityPresentationTask?.cancel()
-		presentedActivity = nil
-		activityPresentationTask = Task { [weak self] in
-			do {
-				try await Task.sleep(for: .milliseconds(250))
-			} catch {
-				return
-			}
-			guard
-				let self,
-				!Task.isCancelled,
-				activeNetworkRequestID == requestID,
-				self.activity == activity
-			else { return }
-			presentedActivity = activity
-		}
 	}
 
 	private func restoreSnapshot(at repositoryURL: URL, requestID: Int) async {

@@ -20,7 +20,8 @@ public protocol RepositoryReferencesUseCase: Sendable {
 	) async throws -> RepositoryReferenceMutationResult
 	func renameBranch(named name: String, to newName: String, at repositoryURL: URL) async throws
 		-> RepositorySnapshot
-	func mergeBranch(named name: String, at repositoryURL: URL) async throws
+	func mergeBranch(named name: String, expecting currentBranch: GitBranch, at repositoryURL: URL)
+		async throws
 		-> RepositorySnapshot
 	func createTag(
 		named name: String,

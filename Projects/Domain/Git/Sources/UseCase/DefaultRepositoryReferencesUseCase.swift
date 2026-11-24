@@ -112,10 +112,13 @@ public struct DefaultRepositoryReferencesUseCase: RepositoryReferencesUseCase {
 		return try await content.loadSnapshot(at: repositoryURL)
 	}
 
-	public func mergeBranch(named name: String, at repositoryURL: URL) async throws
+	public func mergeBranch(
+		named name: String, expecting currentBranch: GitBranch, at repositoryURL: URL
+	) async throws
 		-> RepositorySnapshot
 	{
-		try await repository.requestMergeBranch(named: name, at: repositoryURL)
+		try await repository.requestMergeBranch(
+			named: name, expecting: currentBranch, at: repositoryURL)
 		return try await content.loadSnapshot(at: repositoryURL)
 	}
 
@@ -189,7 +192,7 @@ public struct DefaultRepositoryReferencesUseCase: RepositoryReferencesUseCase {
 			operationState: operationState,
 			selectedRemoteName: selectedRemoteName
 		)
-		try await repository.requestPush(target, at: repositoryURL)
+		try await repository.requestPush(target, expecting: currentBranch, at: repositoryURL)
 		return try await loadSnapshotAfterPush(at: repositoryURL)
 	}
 

@@ -35,7 +35,7 @@ let project = Project(
 			infoPlist: .extendingDefault(with: [
 				"LSUIElement": .boolean(true),
 				"PluminonDataNamespace": "$(PLUMINON_DATA_NAMESPACE)",
-				"PluminonCredentialNamespace": "$(PLUMINON_BUNDLE_IDENTIFIER)",
+				"PluminonCredentialNamespace": "$(PLUMINON_CREDENTIAL_NAMESPACE)",
 			]),
 			sources: PluminonProduct.askPassSources,
 			entitlements: Permissions.appEntitlements,

@@ -212,7 +212,7 @@ private func assertCurrentStorage(_ query: [String: Any]) {
 	#expect(query[kSecUseDataProtectionKeychain as String] as? Bool == true)
 	#expect(
 		query[kSecAttrAccessGroup as String] as? String
-			== "TESTTEAM.com.francisswiftbuilder.pluminon.GitCredential"
+			== "TESTTEAM.io.github.francisswiftbuilder.pluminon.GitCredential"
 	)
 }
 

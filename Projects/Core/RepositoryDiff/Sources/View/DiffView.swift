@@ -221,7 +221,7 @@ public struct DiffView: View {
 			DiffViewer(
 				searchModel: searchModel,
 				document: presentation.document,
-				sideBySideRows: presentation.sideBySideRows,
+				hunks: presentation.hunks,
 				presentationMode: presentationMode,
 				filePath: presentation.input.filePath,
 				lineAction: allowsPartialActions ? lineAction : nil,

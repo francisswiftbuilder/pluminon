@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 RUNTIME="$(cd "${1:?usage: test_bundled_git.sh <runtime-directory>}" && pwd)"
 WORK_DIR="$(mktemp -d "${TMPDIR:-/tmp}/pluminon-git-smoke.XXXXXX")"
 trap 'printf "Smoke test workspace: %s\n" "$WORK_DIR"' EXIT
@@ -22,4 +23,19 @@ git -C "$WORK_DIR/first" push
 git -C "$WORK_DIR/second" pull --ff-only
 [[ "$(git -C "$WORK_DIR/first" rev-parse HEAD)" == "$(git -C "$WORK_DIR/second" rev-parse HEAD)" ]]
 git -C "$WORK_DIR/second" fsck --full
+STAGED="$WORK_DIR/staged"
+INSTALLED="$WORK_DIR/installed"
+mkdir "$STAGED"
+printf 'previous\n' > "$STAGED/version"
+/usr/bin/swift "$ROOT_DIR/script/InstallBundledGit.swift" "$STAGED" "$INSTALLED"
+if /usr/bin/swift "$ROOT_DIR/script/InstallBundledGit.swift" "$STAGED" "$INSTALLED" 2>/dev/null; then
+	printf 'Installing a missing runtime unexpectedly succeeded.\n' >&2
+	exit 1
+fi
+[[ "$(< "$INSTALLED/version")" == previous ]]
+mkdir "$STAGED"
+printf 'replacement\n' > "$STAGED/version"
+/usr/bin/swift "$ROOT_DIR/script/InstallBundledGit.swift" "$STAGED" "$INSTALLED"
+[[ "$(< "$INSTALLED/version")" == replacement ]]
+[[ "$(< "$STAGED/version")" == previous ]]
 printf 'Bundled Git smoke test passed.\n'

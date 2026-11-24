@@ -33,7 +33,7 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>PluminonCredentialNamespace</key>
-	<string>$(PLUMINON_BUNDLE_IDENTIFIER)</string>
+	<string>$(PLUMINON_CREDENTIAL_NAMESPACE)</string>
 	<key>PluminonDataNamespace</key>
 	<string>$(PLUMINON_DATA_NAMESPACE)</string>
 </dict>

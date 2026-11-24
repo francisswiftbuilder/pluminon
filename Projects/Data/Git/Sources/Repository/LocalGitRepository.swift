@@ -173,7 +173,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 	public func requestCommitHistory(at repositoryURL: URL) async throws -> [GitCommit] {
 		let format =
 			"%H%x1f%h%x1f%P%x1f%an%x1f%ae%x1f%aI%x1f%cn%x1f%ce%x1f%cI%x1f%D%x1f%s%x1f%b%x1e"
-		let head = try await requestCommitPlanHead(at: repositoryURL)
+		let head = try await requestHeadHash(at: repositoryURL)
 		do {
 			let result = try await runner.requestRun(
 				arguments: [
@@ -609,7 +609,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 	public func requestUnstage(change: WorkingTreeChange, at repositoryURL: URL) async throws {
 		try await requestMutation(at: repositoryURL) {
 			let paths = [change.path, change.previousPath].compactMap { $0 }
-			let hasHead = try await requestCommitPlanHead(at: repositoryURL) != nil
+			let hasHead = try await requestHeadHash(at: repositoryURL) != nil
 			let arguments =
 				hasHead
 				? ["--literal-pathspecs", "restore", "--staged", "--"]
@@ -703,8 +703,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 
 	private func discardMetadata(for paths: [String], at repositoryURL: URL) async throws -> [String]
 	{
-		let branch = try await requestCommitPlanBranchReference(at: repositoryURL)
-		let head = try await requestCommitPlanHead(at: repositoryURL)
+		let branch = try await requestHeadBranchReference(at: repositoryURL)
+		let head = try await requestHeadHash(at: repositoryURL)
 		let index = try await runner.requestRun(
 			arguments: ["--literal-pathspecs", "ls-files", "--stage", "-z", "--"] + paths,
 			at: repositoryURL
@@ -775,7 +775,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 					arguments: [
 						"checkout-index", "--prefix=\(transaction.replacementsURL.path)/", "-z", "--stdin",
 					],
-					at: root, standardInput: trackedPaths.joined(separator: "\0") + "\0"
+					at: root, standardInput: trackedPaths.joined(separator: "\0") + "\0",
+					allowsLFSDownloads: true
 				)
 			}
 			do {
@@ -928,9 +929,9 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 
 	public func requestCommitPlanInput(at repositoryURL: URL) async throws -> GitCommitPlanInput {
 		try await requestEnsureIdle(at: repositoryURL)
-		guard let branchReference = try await requestCommitPlanBranchReference(at: repositoryURL)
+		guard let branchReference = try await requestHeadBranchReference(at: repositoryURL)
 		else { throw GitCommitPlanError.repositoryChanged }
-		let head = try await requestCommitPlanHead(at: repositoryURL)
+		let head = try await requestHeadHash(at: repositoryURL)
 		let entries = try await runner.requestRun(
 			arguments: ["ls-files", "--stage", "-z"], at: repositoryURL
 		).standardOutput
@@ -967,8 +968,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		let currentEntries = try await runner.requestRun(
 			arguments: ["ls-files", "--stage", "-z"], at: repositoryURL
 		).standardOutput
-		guard entries == currentEntries, head == (try await requestCommitPlanHead(at: repositoryURL)),
-			branchReference == (try await requestCommitPlanBranchReference(at: repositoryURL))
+		guard entries == currentEntries, head == (try await requestHeadHash(at: repositoryURL)),
+			branchReference == (try await requestHeadBranchReference(at: repositoryURL))
 		else { throw GitCommitPlanError.repositoryChanged }
 		return GitCommitPlanInput(
 			headHash: head, indexFingerprint: GitCommitUnitParser.fingerprint(entries), units: units,
@@ -1011,8 +1012,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 				at: repositoryURL, standardInput: patch, environment: environment)
 			let subject = task.subject.trimmingCharacters(in: .whitespacesAndNewlines)
 			let body = task.body.trimmingCharacters(in: .whitespacesAndNewlines)
-			guard try await requestCommitPlanHead(at: repositoryURL) == input.headHash,
-				try await requestCommitPlanBranchReference(at: repositoryURL) == input.branchReference
+			guard try await requestHeadHash(at: repositoryURL) == input.headHash,
+				try await requestHeadBranchReference(at: repositoryURL) == input.branchReference
 			else {
 				throw GitCommitPlanError.repositoryChanged
 			}
@@ -1023,7 +1024,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		}
 	}
 
-	private func requestCommitPlanHead(at repositoryURL: URL) async throws -> String? {
+	private func requestHeadHash(at repositoryURL: URL) async throws -> String? {
 		let result = try await runner.requestRun(
 			arguments: ["rev-parse", "--verify", "--quiet", "HEAD"], at: repositoryURL,
 			acceptedTerminationStatuses: [0, 1])
@@ -1031,7 +1032,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		return hash.isEmpty ? nil : hash
 	}
 
-	private func requestCommitPlanBranchReference(at repositoryURL: URL) async throws -> String? {
+	private func requestHeadBranchReference(at repositoryURL: URL) async throws -> String? {
 		let result = try await runner.requestRun(
 			arguments: ["symbolic-ref", "--quiet", "HEAD"], at: repositoryURL,
 			acceptedTerminationStatuses: [0, 1])
@@ -1054,7 +1055,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 			try await requestValidateReference(name, prefix: "refs/heads/", at: repositoryURL)
 			try await requestEnsureIdle(at: repositoryURL)
 			_ = try await runner.requestRun(
-				arguments: ["switch", "--no-guess", "--no-overwrite-ignore", "--", name], at: repositoryURL)
+				arguments: ["switch", "--no-guess", "--no-overwrite-ignore", "--", name],
+				at: repositoryURL, allowsLFSDownloads: true)
 		}
 	}
 
@@ -1113,7 +1115,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 				: ["branch"] + tracking + ["--", name]
 			do {
 				_ = try await runner.requestRun(
-					arguments: arguments + [start].compactMap { $0 }, at: repositoryURL)
+					arguments: arguments + [start].compactMap { $0 },
+					at: repositoryURL, allowsLFSDownloads: checkout)
 			} catch GitRepositoryError.commandFailed(let message) {
 				if checkout, message.contains("would be overwritten") {
 					throw GitRepositoryError.referenceOperationFailed(
@@ -1142,7 +1145,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 			}
 			_ = try await runner.requestRun(
 				arguments: ["switch", "--no-overwrite-ignore", "--detach", "--", commitHash],
-				at: repositoryURL
+				at: repositoryURL, allowsLFSDownloads: true
 			)
 		}
 	}
@@ -1276,10 +1279,25 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		}
 	}
 
-	public func requestMergeBranch(named name: String, at repositoryURL: URL) async throws {
+	public func requestMergeBranch(
+		named name: String, expecting currentBranch: GitBranch, at repositoryURL: URL
+	) async throws {
 		try await requestMutation(at: repositoryURL) {
 			try await requestValidateReference(name, prefix: "refs/heads/", at: repositoryURL)
+			try await requestValidateCurrentBranch(currentBranch, at: repositoryURL)
 			try await requestMerge(reference: "refs/heads/\(name)", at: repositoryURL)
+		}
+	}
+
+	private func requestValidateCurrentBranch(_ expected: GitBranch, at repositoryURL: URL)
+		async throws
+	{
+		guard
+			try await requestHeadBranchReference(at: repositoryURL) == "refs/heads/\(expected.name)",
+			try await requestHeadHash(at: repositoryURL) == expected.hash
+		else {
+			throw GitRepositoryError.commandFailed(
+				"The current branch or HEAD changed. Review the branch and try again.")
 		}
 	}
 
@@ -1288,7 +1306,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		do {
 			_ = try await runner.requestRun(
 				arguments: ["merge", "--no-edit", "--", reference],
-				at: repositoryURL
+				at: repositoryURL, allowsLFSDownloads: true
 			)
 		} catch is CancellationError {
 			throw CancellationError()
@@ -1300,9 +1318,12 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		}
 	}
 
-	public func requestRebase(onto branchName: String, at repositoryURL: URL) async throws {
+	public func requestRebase(
+		onto branchName: String, expecting currentBranch: GitBranch, at repositoryURL: URL
+	) async throws {
 		try await requestMutation(at: repositoryURL) {
 			try await requestValidateReference(branchName, prefix: "refs/heads/", at: repositoryURL)
+			try await requestValidateCurrentBranch(currentBranch, at: repositoryURL)
 			try await requestRebase(reference: "refs/heads/\(branchName)", at: repositoryURL)
 		}
 	}
@@ -1389,7 +1410,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 					arguments: [
 						"checkout-index", "--stage=\(stage)",
 						"--prefix=\(transaction.replacementsURL.path)/", "-z", "--stdin",
-					], at: root, standardInput: path + "\0")
+					], at: root, standardInput: path + "\0", allowsLFSDownloads: true)
 			}
 			try FileManager.default.copyItem(at: indexURL, to: index.temporaryIndexURL)
 			var update = "0 \(String(repeating: "0", count: hash.count))\t\(path)\0"
@@ -1646,7 +1667,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 					"checkout-index", "--prefix=\(transaction.replacementsURL.path)/", "-z", "--stdin",
 				],
 				at: root, standardInput: replacements.joined(separator: "\0") + "\0",
-				environment: environment)
+				environment: environment, allowsLFSDownloads: true)
 		}
 		let reference = "refs/heads/\(context.branchName)"
 		do {
@@ -2055,7 +2076,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 			case (0, _):
 				_ = try await runner.requestRun(
 					arguments: ["merge", "--ff-only", "--", upstreamHash],
-					at: repositoryURL
+					at: repositoryURL, allowsLFSDownloads: true
 				)
 				return .fastForwarded
 			case (let aheadCount, let behindCount):
@@ -2107,9 +2128,14 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 		}
 	}
 
-	public func requestPush(_ target: GitPushTarget, at repositoryURL: URL) async throws {
+	public func requestPush(
+		_ target: GitPushTarget, expecting currentBranch: GitBranch? = nil, at repositoryURL: URL
+	) async throws {
 		try await requestMutation(at: repositoryURL) {
 			try await requestEnsureIdle(at: repositoryURL)
+			if let currentBranch {
+				try await requestValidateCurrentBranch(currentBranch, at: repositoryURL)
+			}
 			let command = try await requestPushCommand(for: target, at: repositoryURL)
 			let requiresSSHTrustScope = try await requestRemoteUsesSSH(
 				named: command.remoteName, usesPushURL: true, at: repositoryURL)
@@ -2636,7 +2662,11 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 				["push", "--", remoteName, "\(source):\(destination)"], remoteName, source, destination
 			)
 		case .setUpstream(let remoteName, let branchName):
-			try await requestValidateReference(branchName, prefix: "refs/heads/", at: repositoryURL)
+			guard try await requestHeadBranchReference(at: repositoryURL) == "refs/heads/\(branchName)"
+			else {
+				throw GitRepositoryError.commandFailed(
+					"The current branch changed. Review it before pushing.")
+			}
 			let reference = "refs/heads/\(branchName)"
 			return (
 				["push", "--set-upstream", "--", remoteName, "\(reference):\(reference)"],
@@ -2695,7 +2725,8 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 			_ = try await runner.requestRun(
 				arguments: arguments,
 				at: repositoryURL,
-				environment: operationEnvironment
+				environment: operationEnvironment,
+				allowsLFSDownloads: true
 			)
 		} catch is CancellationError {
 			throw CancellationError()

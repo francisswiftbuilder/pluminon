@@ -8,9 +8,13 @@ struct RepositoryTabsView: View {
 	let accountViewModel: GitAccountViewModel
 	let windowViewModel: RepositoryWindowViewModel
 	@Binding var repositoryID: RepositoryTab.ID?
+	@State private var browserSource: RepositoryWelcomeContainerView.Source? = .remote
 
 	var body: some View {
-		Group {
+		NavigationSplitView {
+			sidebar
+				.navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
+		} detail: {
 			if let repositoryTab {
 				WorkspaceView(
 					workspace: repositoryTab.workspace,
@@ -19,6 +23,7 @@ struct RepositoryTabsView: View {
 				)
 			} else {
 				RepositoryWelcomeContainerView(
+					source: browserSource ?? .remote,
 					accountViewModel: accountViewModel,
 					repositories: viewModel.tabs.map(\.repository),
 					isWorking: viewModel.isAddingRepository,
@@ -40,13 +45,14 @@ struct RepositoryTabsView: View {
 			activateSidebarSelection(selection)
 		}
 		.toolbar {
-			if let repositoryTab {
+			if let workspace = (repositoryTab ?? viewModel.selectedTab)?.workspace {
 				RepositoryWorkspaceToolbar(
-					viewModel: repositoryTab.workspace.viewModel,
-					operationViewModel: repositoryTab.workspace.operationViewModel,
-					referencesViewModel: repositoryTab.workspace.referencesViewModel,
-					syncViewModel: repositoryTab.workspace.syncViewModel,
-					remotesViewModel: repositoryTab.workspace.remotesViewModel,
+					viewModel: workspace.viewModel,
+					operationViewModel: workspace.operationViewModel,
+					referencesViewModel: workspace.referencesViewModel,
+					syncViewModel: workspace.syncViewModel,
+					remotesViewModel: workspace.remotesViewModel,
+					allowsRepositoryActions: repositoryTab != nil,
 					onCreateBranch: presentNewBranch
 				)
 			}
@@ -59,6 +65,31 @@ struct RepositoryTabsView: View {
 				windowViewModel.folderImportRequest?.allowsMultipleSelection ?? false
 		) { handleFolderImport($0) }
 		.modifier(RepositoryErrorAlertModifier(message: $viewModel.alertMessage))
+	}
+
+	@ViewBuilder
+	private var sidebar: some View {
+		if let repositoryTab {
+			let workspace = repositoryTab.workspace
+			RepositorySidebar(
+				viewModel: workspace.viewModel,
+				windowViewModel: windowViewModel,
+				changesViewModel: workspace.changesViewModel,
+				operationViewModel: workspace.operationViewModel,
+				referencesViewModel: workspace.referencesViewModel,
+				remotesViewModel: workspace.remotesViewModel,
+				stashesViewModel: workspace.stashesViewModel,
+				repositoryID: repositoryTab.id
+			)
+		} else {
+			List(selection: $browserSource) {
+				Label("Local", systemImage: "folder")
+					.tag(RepositoryWelcomeContainerView.Source.local)
+				Label("Remote", systemImage: "network")
+					.tag(RepositoryWelcomeContainerView.Source.remote)
+			}
+			.listStyle(.sidebar)
+		}
 	}
 
 	private func presentNewBranch() {

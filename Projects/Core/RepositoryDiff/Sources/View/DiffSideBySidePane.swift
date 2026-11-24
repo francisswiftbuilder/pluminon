@@ -33,18 +33,20 @@ struct DiffSideBySidePane: View {
 						activeSearchRange: activeSearchRange
 					)
 				)
-				.font(.system(size: 12, design: .monospaced))
+				.font(.system(size: DiffHunk.codeFontSize, design: .monospaced))
 				.padding(.leading, 8)
 				.padding(.trailing, 12)
 				.padding(.vertical, 1)
-				.fixedSize(horizontal: false, vertical: true)
+				.lineLimit(1)
+				.fixedSize(horizontal: true, vertical: false)
 				.textSelection(.enabled)
 			}
 
 			Spacer(minLength: 12)
 		}
-		.frame(maxWidth: .infinity, minHeight: 20, alignment: .topLeading)
-		.background(backgroundColor)
+		.frame(maxWidth: .infinity, alignment: .topLeading)
+		.frame(height: DiffHunk.rowHeight, alignment: .topLeading)
+		.background { backgroundColor }
 		.accessibilityElement(children: .combine)
 		.accessibilityLabel(accessibilityLabel)
 	}

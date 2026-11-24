@@ -13,30 +13,26 @@ public struct RepositoryPushMenu: View {
 	}
 
 	public var body: some View {
-		if viewModel.presentedActivity?.isPush == true {
-			RepositorySyncCancelButton(viewModel: viewModel)
-		} else {
-			Group {
-				if hasPrimaryPush {
-					Menu {
-						pushOptions
-					} label: {
-						Label("Push", systemImage: "arrow.up")
-					} primaryAction: {
-						viewModel.didRequestPush(remoteName: preferredRemoteName)
-					}
-				} else {
-					Menu {
-						pushOptions
-					} label: {
-						Label("Push", systemImage: "arrow.up")
-					}
+		Group {
+			if hasPrimaryPush {
+				Menu {
+					pushOptions
+				} label: {
+					Label("Push", systemImage: "arrow.up")
+				} primaryAction: {
+					viewModel.didRequestPush(remoteName: preferredRemoteName)
+				}
+			} else {
+				Menu {
+					pushOptions
+				} label: {
+					Label("Push", systemImage: "arrow.up")
 				}
 			}
-			.accessibilityLabel("Push")
-			.disabled(viewModel.isLoading || !hasAvailableAction)
-			.help("Push Current Branch or Tags")
 		}
+		.accessibilityLabel("Push")
+		.disabled(viewModel.isLoading || !hasAvailableAction)
+		.help("Push Current Branch or Tags")
 	}
 
 	private var pushOptions: some View {

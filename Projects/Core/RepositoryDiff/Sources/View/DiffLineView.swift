@@ -41,7 +41,7 @@ struct DiffLineView: View {
 					activeSearchRange: activeSearchRange
 				)
 			)
-			.font(.system(size: 12, design: .monospaced))
+			.font(.system(size: DiffHunk.codeFontSize, design: .monospaced))
 			.padding(.leading, 8)
 			.padding(.trailing, 12)
 			.padding(.vertical, 1)
@@ -51,7 +51,8 @@ struct DiffLineView: View {
 
 			Spacer(minLength: 12)
 		}
-		.frame(maxWidth: .infinity, minHeight: 20, alignment: .leading)
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.frame(height: DiffHunk.rowHeight)
 		.background { backgroundColor }
 		.contextMenu { lineContextMenu }
 	}
@@ -100,7 +101,8 @@ struct DiffLineView: View {
 			}
 		}
 		.padding(.horizontal, 8)
-		.frame(maxWidth: .infinity, minHeight: 30, alignment: .leading)
+		.frame(maxWidth: .infinity, alignment: .leading)
+		.frame(height: DiffHunk.headerHeight)
 		.background(Color.primary.opacity(0.05))
 	}
 

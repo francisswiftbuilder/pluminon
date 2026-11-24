@@ -7,7 +7,7 @@ import Observation
 @Observable
 final class WorkspaceViewModel {
 	private static let logger = Logger(
-		subsystem: Bundle.main.bundleIdentifier ?? "com.francisswiftbuilder.pluminon",
+		subsystem: Bundle.main.bundleIdentifier ?? "io.github.francisswiftbuilder.pluminon",
 		category: "RepositoryRefresh")
 
 	struct Actions {

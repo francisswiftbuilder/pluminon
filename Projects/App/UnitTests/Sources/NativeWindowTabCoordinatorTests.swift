@@ -186,6 +186,136 @@ struct NativeWindowTabCoordinatorTests {
 	}
 
 	@Test
+	func testSingleTabShowsTheTabBarAndCanOpenAnEmptyTab() throws {
+		let repository = makeRepository()
+		let coordinator = makeCoordinator(
+			viewModel: makeRepositoryTabsViewModel(
+				savedRepositoryStore: SavedRepositoryStoreSpy(repositories: [repository])
+			)
+		)
+		let existingWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+		defer { closeWindows(openedAfter: existingWindows, using: coordinator) }
+		let window = makeWindow()
+		coordinator.register(window, repositoryID: repository.id)
+		window.makeKeyAndOrderFront(nil)
+		let group = try #require(window.tabGroup)
+
+		#expect(group.isTabBarVisible)
+		#expect(group.windows == [window])
+
+		let controller = try #require(window.windowController as? RepositoryWindowController)
+		controller.newWindowForTab(nil)
+
+		#expect(group.windows.count == 2)
+		let newTab = try #require(group.selectedWindow)
+		try #require(newTab !== window)
+		newTab.close()
+
+		#expect(window.tabGroup?.windows == [window])
+		#expect(window.tabGroup?.isTabBarVisible == true)
+	}
+
+	@Test
+	func testRepositoryBrowserKeepsTheRepositoryWindowChrome() async throws {
+		let existingWindows = Set(NSApp.windows.map(ObjectIdentifier.init))
+		let repository = makeRepository()
+		let viewModel = makeRepositoryTabsViewModel(
+			savedRepositoryStore: SavedRepositoryStoreSpy(repositories: [repository]))
+		let account = GitAccountViewModel()
+		let makeRootView: NativeWindowTabCoordinator.RootViewFactory = { repositoryID in
+			AnyView(
+				RepositoryTabsView(
+					viewModel: viewModel, accountViewModel: account,
+					windowViewModel: RepositoryWindowViewModel(), repositoryID: repositoryID))
+		}
+		let coordinator = NativeWindowTabCoordinator(
+			actions: .init(
+				didSelectRepository: { viewModel.didSelectTab($0) },
+				didCloseRepository: { _ in }, didCloseLastWindow: {}),
+			makeRootView: makeRootView)
+		defer { closeWindows(openedAfter: existingWindows, using: coordinator) }
+		let window = makeWindow()
+		window.styleMask.insert(.fullSizeContentView)
+		window.toolbarStyle = .unified
+		let repositoryRoot = makeRootView(.constant(repository.id))
+			.environment(\.windowTabCoordinator, coordinator)
+		let hostingController = NSHostingController(rootView: repositoryRoot)
+		hostingController.sizingOptions = []
+		window.contentViewController = hostingController
+		coordinator.register(window, repositoryID: repository.id)
+		window.makeKeyAndOrderFront(nil)
+		let content = try #require(window.contentView)
+		try await waitForLayout(in: content)
+		let repositorySidebar = try #require(sidebar(in: content))
+		let repositorySidebarWidth = try #require(repositorySidebar.enclosingScrollView).frame.width
+		let repositoryToolbarItems = try #require(window.toolbar).items.map(\.label)
+
+		let controller = try #require(window.windowController as? RepositoryWindowController)
+		controller.newWindowForTab(nil)
+
+		let group = try #require(window.tabGroup)
+		let browser = try #require(group.selectedWindow)
+		try #require(browser !== window)
+		#expect(group.windows.count == 2)
+		#expect(group.isTabBarVisible)
+		#expect(window.styleMask.contains(.fullSizeContentView))
+		#expect(browser.styleMask.contains(.fullSizeContentView))
+		#expect(browser.toolbarStyle == window.toolbarStyle)
+		let browserContent = try #require(browser.contentView)
+		try await waitForLayout(in: browserContent)
+		#expect(browser.frame.size == window.frame.size)
+		let browserSidebar = try #require(sidebar(in: browserContent))
+		#expect(browserSidebar.numberOfRows == 2)
+		#expect(browserSidebar.enclosingScrollView?.frame.width == repositorySidebarWidth)
+		#expect(browser.toolbar?.items.map(\.label) == repositoryToolbarItems)
+		#expect(browserSidebar.selectedRow == 1)
+		let searchField = try #require(repositorySearchField(in: browserContent))
+		let searchBounds = searchField.convert(searchField.bounds, to: nil)
+		let sidebarBounds = browserSidebar.convert(browserSidebar.bounds, to: nil)
+		#expect(searchBounds.minX >= sidebarBounds.maxX)
+		#expect(searchBounds.maxY <= browser.contentLayoutRect.maxY)
+
+		browserSidebar.selectRowIndexes(IndexSet(integer: 0), byExtendingSelection: false)
+		try await waitForLayout(in: browserContent)
+		#expect(repositorySearchField(in: browserContent) == nil)
+		#expect(browserSidebar.isDescendant(of: browserContent))
+		#expect(browserSidebar.enclosingScrollView?.frame.width == repositorySidebarWidth)
+		#expect(browserSidebar.selectedRow == 0)
+
+		browserSidebar.selectRowIndexes(IndexSet(integer: 1), byExtendingSelection: false)
+		try await waitForLayout(in: browserContent)
+		#expect(repositorySearchField(in: browserContent) != nil)
+		#expect(browserSidebar.selectedRow == 1)
+		#expect(group.selectedWindow === browser)
+
+		coordinator.register(browser, repositoryID: UUID())
+		#expect(browser.styleMask.contains(.fullSizeContentView))
+		#expect(browser.toolbarStyle == window.toolbarStyle)
+		#expect(browser.tabGroup === group)
+	}
+
+	private func waitForLayout(in view: NSView) async throws {
+		for _ in 0..<10 {
+			view.layoutSubtreeIfNeeded()
+			try await Task.sleep(for: .milliseconds(20))
+		}
+	}
+
+	private func sidebar(in view: NSView) -> NSOutlineView? {
+		if let outline = view as? NSOutlineView { return outline }
+		return view.subviews.lazy.compactMap { sidebar(in: $0) }.first
+	}
+
+	private func repositorySearchField(in view: NSView) -> NSTextField? {
+		if let field = view as? NSTextField,
+			field.placeholderString == "Search or enter repository URL"
+		{
+			return field
+		}
+		return view.subviews.lazy.compactMap { repositorySearchField(in: $0) }.first
+	}
+
+	@Test
 	func testOpeningExistingRepositoryFocusesItsWindowWithoutCreatingDuplicate() {
 		let repository = makeRepository()
 		let coordinator = makeCoordinator(

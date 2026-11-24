@@ -107,7 +107,8 @@ struct WorkspaceDetail: View {
 				case .remotes:
 					RemotesView(
 						viewModel: remotesViewModel,
-						syncViewModel: syncViewModel
+						syncViewModel: syncViewModel,
+						isRepositoryMutating: operationViewModel.isLoading || referencesViewModel.isLoading
 					)
 				case .stashes:
 					StashesView(

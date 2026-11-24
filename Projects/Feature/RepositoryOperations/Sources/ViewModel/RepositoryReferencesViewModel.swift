@@ -39,6 +39,7 @@ public final class RepositoryReferencesViewModel {
 	public private(set) var tags: [GitTag] = []
 	public private(set) var operationState: RepositoryOperationState = .normal
 	public private(set) var isLoading = false
+	public private(set) var switchingBranchName: String?
 	private(set) var mutationErrorMessage: String?
 	var newBranchName = ""
 	var isPresentingNewBranch = false
@@ -151,6 +152,7 @@ public final class RepositoryReferencesViewModel {
 		mutationTask?.cancel()
 		mutationTask = nil
 		activeMutationRequestID = nil
+		switchingBranchName = nil
 		isLoading = false
 	}
 
@@ -194,6 +196,7 @@ public final class RepositoryReferencesViewModel {
 		let submittedName = newBranchName
 		let referencesUseCase = dependencies.referencesUseCase
 		requestMutation(
+			switchingTo: checkout ? name : nil,
 			{
 				try await referencesUseCase.createBranch(
 					named: name, from: source, checkout: checkout, at: repositoryURL)
@@ -270,7 +273,7 @@ public final class RepositoryReferencesViewModel {
 			operationState.isIdle
 		else { return }
 		let referencesUseCase = dependencies.referencesUseCase
-		requestMutation {
+		requestMutation(switchingTo: branch.name) {
 			try await referencesUseCase.switchBranch(
 				named: branch.name,
 				at: repositoryURL
@@ -373,7 +376,7 @@ public final class RepositoryReferencesViewModel {
 			changes.isEmpty
 		else { return }
 		let referencesUseCase = dependencies.referencesUseCase
-		requestMutation {
+		requestMutation(switchingTo: commit.shortHash) {
 			try await referencesUseCase.checkoutCommit(
 				commit.hash,
 				at: repositoryURL
@@ -432,16 +435,18 @@ public final class RepositoryReferencesViewModel {
 	}
 
 	private func requestMutation(
+		switchingTo branchName: String? = nil,
 		_ operation: @escaping @MainActor () async throws -> RepositorySnapshot,
 		didSucceed: @escaping @MainActor () -> Void = {}
 	) {
-		requestMutation(operation) { [weak self] snapshot in
+		requestMutation(switchingTo: branchName, operation) { [weak self] snapshot in
 			didSucceed()
 			self?.actions.didProduceSnapshot(snapshot)
 		}
 	}
 
 	private func requestMutation<Result>(
+		switchingTo branchName: String? = nil,
 		_ operation: @escaping @MainActor () async throws -> Result,
 		formError: Bool = false,
 		applyResult: @escaping @MainActor (Result) -> Void
@@ -452,6 +457,7 @@ public final class RepositoryReferencesViewModel {
 		let requestID = mutationRequestSequence
 		activeMutationRequestID = requestID
 		isLoading = true
+		switchingBranchName = branchName
 		mutationErrorMessage = nil
 		mutationErrorDetails = nil
 		mutationTask = Task { [weak self] in
@@ -491,6 +497,7 @@ public final class RepositoryReferencesViewModel {
 		guard activeMutationRequestID == id else { return }
 		activeMutationRequestID = nil
 		mutationTask = nil
+		switchingBranchName = nil
 		isLoading = false
 	}
 

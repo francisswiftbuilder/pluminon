@@ -92,6 +92,21 @@ struct ReferenceMutationStateTests {
 		#expect(model.pendingTagCommit == nil)
 	}
 
+	@Test(arguments: [false, true])
+	func branchCreationShowsSwitchProgressImmediatelyWhenCheckingOut(checkout: Bool) async throws {
+		let gate = OperationsMutationGate()
+		let model = makeReferences(gate: gate)
+		model.didPresentNewBranch()
+		model.newBranchName = "new-branch"
+		model.checkOutNewBranch = checkout
+		model.didRequestCreateBranch()
+		#expect(model.switchingBranchName == (checkout ? "new-branch" : nil))
+		try await gate.waitForRequests(1)
+		await gate.resume(0, with: .success(snapshot()))
+		try await waitUntil { !model.isLoading }
+		#expect(model.switchingBranchName == nil)
+	}
+
 	@Test
 	func cancelledBranchCreationCannotDismissANewerBranchForm() async throws {
 		let gate = OperationsMutationGate()

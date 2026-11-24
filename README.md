@@ -110,8 +110,9 @@ Browse the contents of your repository from inside Pluminon.
 On first launch, connect a GitHub account using a personal access token and choose your commit name and email. You can also continue locally and configure an account later in **Settings → Accounts**.
 
 - Tokens are verified with GitHub and stored by the main app in a separate Pluminon Keychain service. The Git helper requests credentials from the running app over an operation-specific local socket instead of reading Keychain itself. Both sides verify the peer’s code identity and process ancestry; credentials are not passed in command arguments, environment variables, or temporary files. This handoff does not require shared Keychain entitlements or a paid signing certificate.
-- Settings supports adding multiple GitHub accounts, choosing the app-wide active account, replacing its token, and signing out of that account. Token entry is shown only when connecting an account or explicitly replacing a token. Each Git operation keeps the account it started with; switching accounts affects new operations and does not change commit identity. Each build configuration has its own credential namespace.
+- Settings supports adding multiple GitHub accounts, choosing the app-wide active account, replacing its token, and signing out of that account. Token entry is shown only when connecting an account or explicitly replacing a token. Each Git operation keeps the account it started with; switching accounts affects new operations and does not change commit identity. Each build configuration has its own credential namespace. Production keeps the same Keychain service across bundle ID changes.
 - Git uses the bundled Git runtime, an app-specific global configuration at `~/Library/Application Support/Pluminon/Git/config`, and the `PluminonAskPass` helper. A missing runtime produces an error instead of falling back to system Git.
+- Install Git LFS separately for repositories that use it. Pluminon supplies the standard LFS filters in its isolated Git configuration.
 - System/global Git configuration and inherited Git environment overrides are excluded. Network operations use a private home directory so personal `.netrc` files and curl home configuration are not used.
 - Repository-local author identity and normal repository settings still apply. HTTP extra headers, saved cookies, credential usernames, and credential helpers are overridden per command without modifying `.git/config`. Existing remotes and URL rewrites containing embedded credentials are rejected. Repository TLS client-certificate authentication is not supported in isolated mode.
 - GitHub HTTPS URLs and standard GitHub SSH URLs work with the connected account. Pluminon connects GitHub SSH addresses over HTTPS without changing the repository’s saved remote URLs. Other hosts require HTTPS; personal SSH keys and the SSH agent are not used.
@@ -133,7 +134,7 @@ Git source, build scripts, and license notices are included inside `Pluminon.app
 
 Pluminon uses Tuist to manage its modular project structure.
 
-Generate the workspace with `make generate`, which loads `TUIST_CODE_SIGN_IDENTITY` and `TUIST_DEVELOPMENT_TEAM` from `.env.local`. Both values must be configured for development signing of the app and AskPass helper, whose shared Keychain access requires matching team signatures and provisioning profiles. Running `tuist generate` directly does not load this local configuration and can replace development signing with ad hoc signing.
+Generate the workspace with `make generate`, which loads `TUIST_CODE_SIGN_IDENTITY` and `TUIST_DEVELOPMENT_TEAM` from `.env.local`. These values apply to local development signing. The app and AskPass use an operation-specific credential broker. GitHub Releases use the ad hoc signing in `script/package_release.sh`. Developer ID signing and notarization require separate distribution credentials.
 
 Open `Pluminon.xcworkspace` and select the `Pluminon` scheme. Use `make generate TUIST_GENERATE_ARGS=--no-open` to regenerate the workspace without opening Xcode.
 
@@ -141,11 +142,10 @@ App identity and data isolation are configured in `Configurations/*.xcconfig`:
 
 | Configuration file | Display name | Bundle ID | Application Support |
 | --- | --- | --- | --- |
-| `Debug.xcconfig` | Pluminon Dev | `com.francisswiftbuilder.pluminon.dev` | `Pluminon Dev` |
-| `Staging.xcconfig` | Pluminon Staging | `com.francisswiftbuilder.pluminon.staging` | `Pluminon Staging` |
-| `Production.xcconfig` | Pluminon | `com.francisswiftbuilder.pluminon` | `Pluminon` |
+| `Debug.xcconfig` | Pluminon Dev | `io.github.francisswiftbuilder.pluminon.dev` | `Pluminon Dev` |
+| `Production.xcconfig` | Pluminon | `io.github.francisswiftbuilder.pluminon` | `Pluminon` |
 
-Development and staging builds keep their own saved repositories, preferences, Git identity, and credential services. `./script/build_and_run.sh --verify` builds and opens Pluminon Dev without quitting an installed Pluminon. Opening the same repository directory in both apps still shares that repository’s Git state; use a separate clone or worktree when testing Git mutations.
+Development and production builds store saved repositories, preferences, Git identity, and credentials separately. `./script/build_and_run.sh --verify` builds and opens Pluminon Dev without quitting an installed Pluminon. Opening the same repository directory in both apps still shares that repository’s Git state; use a separate clone or worktree when testing Git mutations.
 
 ### Commands
 
@@ -232,7 +232,7 @@ Pluminon uses SwiftData for local application state.
 
 Repository access is restored between launches using macOS security-scoped bookmarks, allowing previously opened repositories to remain accessible without requesting the directory again.
 
-Closing a repository window keeps its saved repository entry. Closing the last window also allows the saved windows to be restored when a new repository window opens in the same app session. Development, staging, and production builds keep separate saved repository lists.
+Closing a repository window keeps its saved repository entry. Closing the last window also allows the saved windows to be restored when a new repository window opens in the same app session. Development and production builds keep separate saved repository lists.
 
 Repository changes refresh automatically while a window is active. Remotes are fetched after activation and every minute while the workspace is idle, keeping remote commits and ahead/behind counts current. Automatic fetch uses saved credentials without opening authentication prompts or showing repeated error alerts, and stops when the window becomes inactive. Changes received during Git operations remain queued, and newer snapshots take precedence over older reads. Linked worktrees monitor both their private Git directory and shared references. Interrupted file monitoring reconnects, and system rescan signals trigger a full content revalidation. Returning to a window also checks for changes made while monitoring was paused.
 

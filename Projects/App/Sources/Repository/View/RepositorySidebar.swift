@@ -100,17 +100,17 @@ struct RepositorySidebar: View {
 							"Merge \(branch.name) into \(currentBranch.name)",
 							systemImage: "arrow.triangle.merge"
 						) {
-							operationViewModel.didRequestMergeBranch(branch)
+							operationViewModel.didRequestMergeBranch(branch, expecting: currentBranch)
 						}
-						.disabled(!operationViewModel.canMergeBranch(branch))
+						.disabled(referencesViewModel.isLoading || !operationViewModel.canMergeBranch(branch))
 
 						Button(
 							"Rebase \(currentBranch.name) onto \(branch.name)",
 							systemImage: "arrow.triangle.2.circlepath"
 						) {
-							operationViewModel.didRequestRebase(onto: branch)
+							operationViewModel.didRequestRebase(onto: branch, expecting: currentBranch)
 						}
-						.disabled(!operationViewModel.canRebaseOnto(branch))
+						.disabled(referencesViewModel.isLoading || !operationViewModel.canRebaseOnto(branch))
 					}
 
 					Button("Rename…", systemImage: "pencil") {

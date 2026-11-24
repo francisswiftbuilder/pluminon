@@ -51,6 +51,16 @@ xcodebuild archive \
 /usr/bin/plutil -replace CFBundleVersion -string "$BUILD_NUMBER" "$APP_BUNDLE/Contents/Info.plist"
 "$ROOT_DIR/script/verify_bundled_git.sh" "$APP_BUNDLE/Contents/Resources/Git"
 
+APP_PLIST="$APP_BUNDLE/Contents/Info.plist"
+HELPER_PLIST="$HELPER_BUNDLE/Contents/Info.plist"
+CREDENTIAL_NAMESPACE="$(/usr/bin/plutil -extract PluminonCredentialNamespace raw -o - "$APP_PLIST")"
+HELPER_CREDENTIAL_NAMESPACE="$(/usr/bin/plutil -extract PluminonCredentialNamespace raw -o - "$HELPER_PLIST")"
+if [[ -z "$CREDENTIAL_NAMESPACE" || "$CREDENTIAL_NAMESPACE" != "$HELPER_CREDENTIAL_NAMESPACE" ]]; then
+	printf 'Pluminon and AskPass must use the same credential namespace.\n' >&2
+	exit 1
+fi
+
+printf 'Packaging an ad hoc release. Development signing does not apply to this DMG.\n'
 /usr/bin/codesign --force --sign - "$HELPER_BUNDLE"
 /usr/bin/codesign --force --sign - "$APP_BUNDLE"
 /usr/bin/codesign --verify --deep --strict --verbose=2 "$APP_BUNDLE"

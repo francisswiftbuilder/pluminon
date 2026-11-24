@@ -1,7 +1,8 @@
 import Foundation
 
 public protocol RepositoryOperationsUseCase: Sendable {
-	func rebase(onto branchName: String, at repositoryURL: URL) async throws -> RepositorySnapshot
+	func rebase(onto branchName: String, expecting currentBranch: GitBranch, at repositoryURL: URL)
+		async throws -> RepositorySnapshot
 	func cherryPick(
 		commitHash: String,
 		mainline: Int?,

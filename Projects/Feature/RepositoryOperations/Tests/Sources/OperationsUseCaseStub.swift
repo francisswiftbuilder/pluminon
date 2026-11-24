@@ -12,7 +12,9 @@ struct OperationsUseCaseStub: RepositoryOperationsUseCase {
 		try await resetOperation(commitHash, mode, context, repositoryURL)
 	}
 
-	func rebase(onto branchName: String, at repositoryURL: URL) async throws -> RepositorySnapshot {
+	func rebase(onto branchName: String, expecting currentBranch: GitBranch, at repositoryURL: URL)
+		async throws -> RepositorySnapshot
+	{
 		fatalError()
 	}
 	func cherryPick(commitHash: String, mainline: Int?, at repositoryURL: URL) async throws
