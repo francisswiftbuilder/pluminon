@@ -286,18 +286,36 @@ public final class RepositoryReferencesViewModel {
 		pendingConfirmation = .checkoutCommit(commit)
 	}
 
-	public func didRequestCreateLocalBranch(from remoteBranch: GitRemoteBranch) {
+	public func didRequestCreateAndSwitchBranch(from remoteBranch: GitRemoteBranch) {
+		guard !isLoading, let repositoryURL = dependencies.repositoryURL() else { return }
+		guard operationState.isIdle else {
+			actions.didReceiveError("Finish the current Git operation before switching branches.")
+			return
+		}
 		guard remoteBranch.remoteReference != nil else {
 			actions.didReceiveError(
 				"This tracking reference has no verified server branch. Review the remote’s fetch mappings."
 			)
 			return
 		}
-		didPresentNewBranch()
-		pendingBranchRemote = remoteBranch
-		newBranchName = remoteBranch.name
-		if branches.contains(where: { $0.name == remoteBranch.name }) {
-			mutationErrorMessage = "A local branch already uses this name. Choose another name."
+		let name = remoteBranch.name
+		if let conflict = branches.first(where: {
+			$0.name == name || $0.name.hasPrefix(name + "/") || name.hasPrefix($0.name + "/")
+		}) {
+			didPresentNewBranch()
+			pendingBranchRemote = remoteBranch
+			newBranchName = name
+			mutationErrorMessage =
+				"This name conflicts with the local branch “\(conflict.name)”. Choose another name."
+			return
+		}
+
+		let referencesUseCase = dependencies.referencesUseCase
+		requestMutation(switchingTo: name) {
+			try await referencesUseCase.createBranch(
+				named: name, from: .remoteBranch(remoteBranch), checkout: true, at: repositoryURL)
+		} applyResult: { [weak self] result in
+			self?.applyReferenceResult(result)
 		}
 	}
 

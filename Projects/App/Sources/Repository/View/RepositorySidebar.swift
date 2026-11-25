@@ -145,20 +145,17 @@ struct RepositorySidebar: View {
 				}
 			case .remoteBranch(_, let id):
 				if let remoteBranch = remotesViewModel.remoteBranches.first(where: { $0.id == id }) {
-					if let localBranch = localBranch(tracking: remoteBranch) {
-						Button(
-							"Switch to \(localBranch.name)",
-							systemImage: "arrow.triangle.branch"
-						) {
-							switchToRemoteBranch(remoteBranch)
-						}
-						.disabled(localBranch.isCurrent)
-					} else {
-						Button("Create Local Branch", systemImage: "arrow.down.to.line") {
-							switchToRemoteBranch(remoteBranch)
-						}
-						.disabled(remoteBranch.remoteReference == nil)
+					let localBranch = localBranch(tracking: remoteBranch)
+					Button(
+						"Switch to \(localBranch?.name ?? remoteBranch.name)",
+						systemImage: "arrow.triangle.branch"
+					) {
+						switchToRemoteBranch(remoteBranch)
 					}
+					.disabled(
+						localBranch?.isCurrent == true || remoteBranch.remoteReference == nil
+							|| referencesViewModel.isLoading || operationViewModel.isLoading
+					)
 
 					Divider()
 					Button("Delete Remote Branch…", systemImage: "trash", role: .destructive) {
@@ -218,11 +215,12 @@ struct RepositorySidebar: View {
 	}
 
 	private func switchToRemoteBranch(_ remoteBranch: GitRemoteBranch) {
+		guard !operationViewModel.isLoading, !referencesViewModel.isLoading else { return }
 		if let localBranch = localBranch(tracking: remoteBranch) {
 			selectBranch(localBranch)
 			referencesViewModel.didRequestSwitchBranch()
 		} else {
-			referencesViewModel.didRequestCreateLocalBranch(from: remoteBranch)
+			referencesViewModel.didRequestCreateAndSwitchBranch(from: remoteBranch)
 		}
 	}
 
