@@ -8,7 +8,6 @@ struct NewBranchSheet: View {
 	let startCommit: GitCommit?
 	let remoteStart: String?
 	let isLoading: Bool
-	let checkingOut: String?
 	let errorMessage: String?
 	let errorDetails: String?
 	let onCancel: () -> Void
@@ -20,7 +19,6 @@ struct NewBranchSheet: View {
 		startCommit: GitCommit? = nil,
 		remoteStart: String? = nil,
 		isLoading: Bool = false,
-		checkingOut: String? = nil,
 		errorMessage: String? = nil,
 		errorDetails: String? = nil,
 		onCancel: @escaping () -> Void,
@@ -31,7 +29,6 @@ struct NewBranchSheet: View {
 		self.startCommit = startCommit
 		self.remoteStart = remoteStart
 		self.isLoading = isLoading
-		self.checkingOut = checkingOut
 		self.errorMessage = errorMessage
 		self.errorDetails = errorDetails
 		self.onCancel = onCancel
@@ -76,9 +73,6 @@ struct NewBranchSheet: View {
 		}
 		.safeAreaInset(edge: .bottom, spacing: 0) {
 			HStack {
-				if let checkingOut {
-					RepositoryActivityIndicator("Switching to \(checkingOut)")
-				}
 				Spacer()
 				Button("Cancel", role: .cancel, action: onCancel)
 					.keyboardShortcut(.cancelAction)

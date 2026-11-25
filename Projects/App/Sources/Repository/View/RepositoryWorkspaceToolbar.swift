@@ -28,23 +28,46 @@ struct RepositoryWorkspaceToolbar: ToolbarContent {
 		self.onCreateBranch = onCreateBranch
 	}
 
-	var body: some ToolbarContent {
-		ToolbarItem(placement: .primaryAction) {
-			if allowsRepositoryActions {
-				let branchName = referencesViewModel.switchingBranchName
-				if let activity = syncViewModel.activity,
-					branchName == nil || syncViewModel.isBlockingLocalRefresh
-				{
-					RepositoryActivityIndicator(
-						activity.statusDescription,
-						cancellation: (activity.cancellationLabel, syncViewModel.didRequestCancelOperation)
-					)
-				} else if let branchName {
-					RepositoryActivityIndicator("Switching to \(branchName)")
-				}
-			}
+	var activityDescription: String? {
+		guard allowsRepositoryActions else { return nil }
+		let branchName = referencesViewModel.switchingBranchName
+		if let activity = syncViewModel.activity,
+			branchName == nil || syncViewModel.isBlockingLocalRefresh
+		{
+			return activity.statusDescription
 		}
+		if let branchName {
+			return "Switching to \(branchName)"
+		}
+		if viewModel.isLoading {
+			return viewModel.isLoadingContent ? "Loading Repository" : "Refreshing Repository"
+		}
+		return nil
+	}
 
+	var idleStatusDescription: String? {
+		guard allowsRepositoryActions, !isMutating, !remotesViewModel.isLoading,
+			referencesViewModel.operationState.isIdle,
+			let branch = referencesViewModel.currentBranch,
+			let upstream = branch.upstream,
+			let remoteName = branch.upstreamRemoteName,
+			let remote = remotesViewModel.remotes.first(where: { $0.name == remoteName }),
+			remote.fetchError == nil
+		else { return nil }
+
+		let upstreamHash =
+			branch.customUpstreamHash
+			?? remote.branches.first(where: { $0.fullName == upstream })?.hash
+		guard upstreamHash == branch.hash else { return nil }
+		return String(localized: "Up to date")
+	}
+
+	var branchName: String? {
+		guard allowsRepositoryActions else { return nil }
+		return referencesViewModel.currentBranchName
+	}
+
+	var body: some ToolbarContent {
 		ToolbarSpacer(.flexible, placement: .primaryAction)
 
 		ToolbarItemGroup(placement: .primaryAction) {

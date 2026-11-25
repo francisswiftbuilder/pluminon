@@ -1120,8 +1120,7 @@ public struct LocalGitRepository: GitCommitPlanningRepository, GitRepository {
 			} catch GitRepositoryError.commandFailed(let message) {
 				if checkout, message.contains("would be overwritten") {
 					throw GitRepositoryError.referenceOperationFailed(
-						message:
-							"Uncheck Check Out New Branch to keep your working files. Commit or stash your changes before switching.",
+						message: "Commit or stash your changes before switching branches.",
 						details: message)
 				}
 				if case .remoteBranch = source, message.contains("invalid reference") {
