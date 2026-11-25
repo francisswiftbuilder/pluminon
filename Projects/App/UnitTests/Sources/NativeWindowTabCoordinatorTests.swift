@@ -248,7 +248,10 @@ struct NativeWindowTabCoordinatorTests {
 		try await waitForLayout(in: content)
 		let repositorySidebar = try #require(sidebar(in: content))
 		let repositorySidebarWidth = try #require(repositorySidebar.enclosingScrollView).frame.width
-		let repositoryToolbarItems = try #require(window.toolbar).items.map(\.label)
+		let repositoryToolbarLabels = try #require(window.toolbar).items.map(\.label)
+			.filter { !$0.isEmpty }
+		let gitActionLabels = ["New Branch", "Refresh", "Fetch", "Pull", "Push"]
+		#expect(repositoryToolbarLabels.suffix(gitActionLabels.count).elementsEqual(gitActionLabels))
 
 		let controller = try #require(window.windowController as? RepositoryWindowController)
 		controller.newWindowForTab(nil)
@@ -267,7 +270,9 @@ struct NativeWindowTabCoordinatorTests {
 		let browserSidebar = try #require(sidebar(in: browserContent))
 		#expect(browserSidebar.numberOfRows == 2)
 		#expect(browserSidebar.enclosingScrollView?.frame.width == repositorySidebarWidth)
-		#expect(browser.toolbar?.items.map(\.label) == repositoryToolbarItems)
+		let browserToolbarLabels = try #require(browser.toolbar).items.map(\.label)
+			.filter { !$0.isEmpty }
+		#expect(browserToolbarLabels == repositoryToolbarLabels)
 		#expect(browserSidebar.selectedRow == 1)
 		let searchField = try #require(repositorySearchField(in: browserContent))
 		let searchBounds = searchField.convert(searchField.bounds, to: nil)
