@@ -11,6 +11,10 @@ struct RepositoryTabsView: View {
 	@State private var browserSource: RepositoryWelcomeContainerView.Source? = .remote
 
 	var body: some View {
+		let workspaceToolbar = repositoryWorkspaceToolbar
+		let title = repositoryTab?.repository.name ?? "New Tab"
+		let activityDescription = workspaceToolbar?.activityDescription
+
 		NavigationSplitView {
 			sidebar
 				.navigationSplitViewColumnWidth(min: 180, ideal: 220, max: 300)
@@ -34,7 +38,7 @@ struct RepositoryTabsView: View {
 				)
 			}
 		}
-		.navigationTitle(repositoryTab?.repository.name ?? "New Tab")
+		.navigationTitle(title)
 		.task {
 			restoreRepositoryWindows()
 		}
@@ -45,19 +49,33 @@ struct RepositoryTabsView: View {
 			activateSidebarSelection(selection)
 		}
 		.toolbar {
-			if let workspace = (repositoryTab ?? viewModel.selectedTab)?.workspace {
-				RepositoryWorkspaceToolbar(
-					viewModel: workspace.viewModel,
-					operationViewModel: workspace.operationViewModel,
-					referencesViewModel: workspace.referencesViewModel,
-					syncViewModel: workspace.syncViewModel,
-					remotesViewModel: workspace.remotesViewModel,
-					allowsRepositoryActions: repositoryTab != nil,
-					onCreateBranch: presentNewBranch
+			ToolbarItem(placement: .navigation) {
+				repositoryTitle(
+					title,
+					status: activityDescription ?? workspaceToolbar?.idleStatusDescription,
+					isWorking: activityDescription != nil
 				)
+				.padding(.leading, 8)
+			}
+			.sharedBackgroundVisibility(.hidden)
+
+			if let workspaceToolbar {
+				if let branchName = workspaceToolbar.branchName {
+					ToolbarItem(placement: .principal) {
+						Text(branchName)
+							.font(.headline)
+							.lineLimit(1)
+							.truncationMode(.middle)
+							.frame(maxWidth: 240)
+					}
+					.sharedBackgroundVisibility(.hidden)
+				}
+
+				workspaceToolbar
 			}
 		}
 		.toolbarRole(.editor)
+		.toolbar(removing: .title)
 		.fileImporter(
 			isPresented: folderImporterPresentation,
 			allowedContentTypes: [.folder],
@@ -65,6 +83,38 @@ struct RepositoryTabsView: View {
 				windowViewModel.folderImportRequest?.allowsMultipleSelection ?? false
 		) { handleFolderImport($0) }
 		.modifier(RepositoryErrorAlertModifier(message: $viewModel.alertMessage))
+	}
+
+	private func repositoryTitle(_ title: String, status: String?, isWorking: Bool) -> some View {
+		HStack(spacing: 6) {
+			Group {
+				if isWorking {
+					ProgressView()
+						.controlSize(.small)
+				} else {
+					Image(systemName: "folder")
+						.foregroundStyle(.secondary)
+				}
+			}
+			.frame(width: 18, height: 18)
+			.accessibilityHidden(true)
+
+			VStack(alignment: .leading, spacing: 2) {
+				Text(title)
+					.font(.headline)
+
+				if let status {
+					Text(status)
+						.font(.subheadline)
+						.foregroundStyle(.secondary)
+				}
+			}
+			.lineLimit(1)
+			.truncationMode(.middle)
+			.frame(maxWidth: 240, alignment: .leading)
+		}
+		.accessibilityElement(children: .combine)
+		.accessibilityAddTraits(.isHeader)
 	}
 
 	@ViewBuilder
@@ -132,6 +182,19 @@ struct RepositoryTabsView: View {
 
 	private var repositoryTab: RepositoryTab? {
 		viewModel.tab(id: repositoryID)
+	}
+
+	private var repositoryWorkspaceToolbar: RepositoryWorkspaceToolbar? {
+		guard let workspace = (repositoryTab ?? viewModel.selectedTab)?.workspace else { return nil }
+		return RepositoryWorkspaceToolbar(
+			viewModel: workspace.viewModel,
+			operationViewModel: workspace.operationViewModel,
+			referencesViewModel: workspace.referencesViewModel,
+			syncViewModel: workspace.syncViewModel,
+			remotesViewModel: workspace.remotesViewModel,
+			allowsRepositoryActions: repositoryTab != nil,
+			onCreateBranch: presentNewBranch
+		)
 	}
 
 	private var folderImporterPresentation: Binding<Bool> {

@@ -74,8 +74,6 @@ struct WorkspaceDetail: View {
 				)
 			} else if viewModel.isLoadingContent {
 				LoadingStateView(title: "Loading Repository")
-					.navigationTitle(viewModel.repositoryName)
-					.navigationSubtitle(referencesViewModel.currentBranchStatus)
 			} else {
 				switch viewModel.selectedSection ?? .changes {
 				case .changes:
@@ -122,8 +120,6 @@ struct WorkspaceDetail: View {
 				}
 			}
 		}
-		.navigationTitle(viewModel.repositoryName)
-		.navigationSubtitle(referencesViewModel.currentBranchStatus)
 		.safeAreaInset(edge: .top, spacing: 0) {
 			VStack(spacing: 0) {
 				if operationViewModel.operationState.isDetached {
